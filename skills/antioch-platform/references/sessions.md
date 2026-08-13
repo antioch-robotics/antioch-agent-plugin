@@ -32,11 +32,13 @@ imports inside function bodies in any imported module.
 Declare the machine's livestream before the first cell boots Isaac:
 
 ```bash
-KERNEL_ID=$(antioch jupyter start)
-antioch jupyter stream --kernel "$KERNEL_ID" --json
-antioch jupyter cell --kernel "$KERNEL_ID" 'antioch.boot()'
-antioch jupyter unstream --kernel "$KERNEL_ID" --json
+antioch jupyter start
+antioch jupyter stream --kernel KERNEL_ID --json
+antioch jupyter cell --kernel KERNEL_ID 'antioch.boot()'
+antioch jupyter unstream --kernel KERNEL_ID --json
 ```
+
+The first command prints `KERNEL_ID`.
 
 The machine has one lease. A streaming kernel and a streaming `antioch run`
 cannot fight over the same listener; repeating the same kernel claim is
@@ -70,8 +72,8 @@ culled.
 ## Direct shells
 
 The `antioch services ssh` command opens a PTY in `sim` by default — when the
-stack has no sim service, name the service explicitly. It resolves
-an existing assignment and is not an admitted, timed process. Use
+stack has no sim service, name the service explicitly. It resolves an existing
+assignment but does not create a recorded run or retain results. Use
 `antioch services exec sim python` for scripts that need a faithful exit
 status; use `antioch machine ssh` for a VM-shell diagnostic. See
 `machines.md` for direct transfer and service selection.

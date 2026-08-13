@@ -1,10 +1,10 @@
 # `antioch.yaml` — the complete manifest reference
 
-This file is the authoritative schema for the project manifest. It covers
+This file lists the complete schema for the project manifest. It covers
 every accepted key, every rejected key with its remedy, the `sim` service
 contract, build and image mechanics, watch rules, ports, and the settings
 Antioch injects at runtime. An agent can author any valid manifest from this
-file alone. Workflow context — creating a project, the engine coordinate,
+file alone. Workflow context — creating a project, choosing the simulation image,
 private registries — lives in `environment.md`.
 
 ## Ground rules
@@ -37,7 +37,7 @@ private registries — lives in `environment.md`.
 | `id` | lowercase slug: letters, digits, hyphens; no leading or trailing hyphen; max 63 chars | slugified `name` | no | Immutable project identity. It binds machine assignments and the Docker project label `antioch-<id>`. Changing it mid-session aborts a watch redeploy. |
 | `scenario_paths` | list of project-relative POSIX paths (no `..`, no leading `/`, no `\`; a trailing `/` is stripped) | unset | no | Explicit scenario discovery scope. When omitted, discovery scans the sim build context — or the project root when `services.sim` is image-only or absent — for `.py` files, pruning hidden, cache, and virtualenv directories and applying `.dockerignore` plus `.gitignore`. |
 | `suites` | map name → suite | `{}` | no | Named declarative selections, run with `antioch suite run NAME`. |
-| `services` | map name → service | — | **yes, at least one service** | The complete service graph. `sim` is the reserved, optional simulation service. |
+| `services` | map name → service | — | **yes, at least one service** | Every container in the project. The optional name `sim` identifies the simulation service. |
 
 Service names match `^[A-Za-z0-9][A-Za-z0-9_.-]+$` (at least two characters).
 Container names become `antioch-<project-id>-<service>`.
@@ -67,7 +67,7 @@ Docker runs underneath Antioch. The 17 supported service keys:
 | Key | Type | Default | When to use |
 |---|---|---|---|
 | `build` | mapping or string shorthand | unset | Build the image on the assigned machine from a Dockerfile. One of `build`/`image` is required. See "Build" below. |
-| `image` | string | unset | Use a registry image directly. For `sim` it must be an engine coordinate; for other services any registry reference works. |
+| `image` | string | unset | Use a registry image directly. For `sim`, use `antioch-sim/<engine>:<sdk-version>`; other services can use any registry image. |
 | `command` | string (shlex-split) or list | unset; sim gets `["sleep", "infinity"]` injected | Container command override. |
 | `entrypoint` | string (shlex-split) or list | unset | Entrypoint override. |
 | `environment` | map or `NAME=VALUE` list | `{}` | Static service environment. Names match `^[A-Za-z_][A-Za-z0-9_]*$`. A `null` map value is rejected — write an explicit `KEY: ""`; there is no host-environment inheritance. Names starting `ANTIOCH_` are reserved for injected values. Booleans lower to `true`/`false` strings. |
@@ -109,9 +109,9 @@ Each fails with `service field '<key>' is not supported — <message>`:
 
 Any other unknown key fails with the supported-key list.
 
-## The `sim` service contract
+## Rules for the `sim` service
 
-`sim` is the reserved simulation service. It is **optional**: a service-only
+The name `sim` identifies the simulation service. It is **optional**: a service-only
 stack (viewer, API, ROS tooling) is valid. Commands that run Isaac code —
 `antioch run`, scenario and suite dispatch, Jupyter kernels — refuse a stack
 without it: "this stack has no sim service; declare services.sim in
@@ -122,13 +122,13 @@ antioch.yaml". When `sim` is present:
 2. `profiles` is forbidden on it; `sim` is always active.
 3. It cannot declare both `build` and `image` (other services can; the build
    result wins there).
-4. Its `image`, when used, must be an engine coordinate
-   `antioch-sim/<engine>:<sim-version>` — engine one of `isaac-601-ga` or
-   `isaac-lab-30b2`, version strict semver. The removed alias
+4. Its `image`, when used, must be a versioned Antioch simulation image:
+   `antioch-sim/<engine>:<sdk-version>`. The engine is `isaac-601-ga` or
+   `isaac-lab-30b2`; the SDK version must use semantic versioning. The removed alias
    `antioch-sim:<version>` fails.
-5. With `build`, the Dockerfile's `FROM` line is the engine source of truth:
-   exactly one Antioch coordinate must appear across its `FROM` lines.
-   No coordinate anywhere fails with "services.sim has no engine coordinate".
+5. With `build`, exactly one Dockerfile `FROM` line must use a versioned
+   `antioch-sim/<engine>:<sdk-version>` image. That value chooses the cloud
+   engine and SDK. Omitting it fails validation.
 6. With no `command`, the loader injects `sleep infinity` so the container
    idles for exec-style dispatch.
 7. No other service may use an engine image — "name the engine service
@@ -222,7 +222,7 @@ How builds run:
 - A content hash over the context, Dockerfile, ignore rules, build args, and
   resolved base images labels the result. An unchanged context reuses the
   image with zero upload ("context unchanged; reusing image …").
-- When the Dockerfile `FROM` names an engine coordinate, the machine prepares
+- When the Dockerfile `FROM` names a versioned Antioch simulation image, the machine prepares
   that engine layer first.
 - A build stream idle for 30 minutes times out; rerun to reuse completed
   layers from cache.
@@ -234,8 +234,8 @@ How images reach machines:
   (`auths`, `credsStore`, `credHelpers`), sent only with that pull.
 - **Queued:** staging resolves every service on the project's current
   machine, bakes the project source into the sim image, and pushes
-  digest-pinned copies into your organization's registry. Queued snapshots
-  require `ref@sha256:<digest>` images; a mutable tag or local-only image
+  copies identified by exact image digests into your organization's registry.
+  Queued environments require `ref@sha256:<digest>` images; a mutable tag or local-only image
   cannot be queued.
 
 ## Watch
@@ -269,7 +269,7 @@ Mechanism facts that matter:
 
 - The session watches file events (no polling). Deletions propagate; changed
   files ship as a tar archive directly into the container.
-- The initial reconciliation owns the entire target subtree: it wipes the
+- The initial sync owns the entire target subtree: it removes the
   target before uploading, so stale files never survive a new session.
 - `.gitignore`, `.dockerignore`, and the rule's `ignore` list are three
   independent boundaries. A negation (`!pattern`) applies only within its own
@@ -292,7 +292,7 @@ scenario_paths: ["src"]
 
 services:
   sim:
-    image: "antioch-sim/isaac-601-ga:0.3.34"
+    image: "antioch-sim/isaac-601-ga:0.3.35"
     watch:
       - action: sync
         path: .
@@ -314,7 +314,7 @@ name: Pick and Place
 services:
   sim:
     build: .    # context ".", dockerfile "Dockerfile";
-                # FROM antioch-sim/isaac-601-ga:0.3.34 is the engine truth
+                # FROM antioch-sim/isaac-601-ga:0.3.35 selects the engine and SDK
     environment:
       ROS_DOMAIN_ID: "7"
     depends_on:
@@ -372,7 +372,7 @@ services:
       context: .
       dockerfile: docker/sim.Dockerfile
       args:
-        EXTRA_INDEX: "https://pypi.internal/simple"
+        EXTRA_INDEX: "https://packages.example.com/simple"
     environment:            # list form is also accepted
       - ROS_DOMAIN_ID=7
       - HEADLESS=true

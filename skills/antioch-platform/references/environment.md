@@ -1,8 +1,9 @@
 # Projects and environments
 
-This file owns the project workflow: creating a project, the engine
-coordinate and SDK extras, the base image inventory, Dockerfile layering,
-private registries, and the queue image-copy story. The complete
+This file owns the project workflow: creating a project, choosing the
+simulation image and SDK engine option, understanding the base image,
+customizing it with a Dockerfile, using private registries, and saving images
+for queued work. The complete
 `antioch.yaml` schema — every key, constraint, watch rule, and example
 manifest — is `manifest.md`; go there for any manifest authoring or
 validation question.
@@ -13,13 +14,16 @@ The project manifest is `antioch.yaml`. From the directory that contains it,
 check the packaged CLI before setup or dispatch:
 
 ```bash
-uv run antioch --version
-uv run antioch init warehouse-amr
+antioch --version
+antioch init warehouse-amr
 ```
 
-`init` is local and non-interactive. It reads the declared engine extra and
-installed SDK version, then
-creates a manifest with the matching image coordinate, a simulation script,
+Run these commands with the project's Python environment active. In a uv
+project whose environment is not active, prefix a command with `uv run`.
+
+`init` is local and non-interactive. It reads the engine option declared in
+the Python dependency and the installed SDK version, then creates a manifest
+with the matching versioned simulation image, a simulation script,
 example scenarios, `smoke` and `sweep` suites, `.gitignore`, and
 `.dockerignore`. It does not allocate a
 machine, register anything remotely, or replace existing source files, and it
@@ -32,15 +36,15 @@ Inspect project identity afterwards — useful when several checkouts exist or
 a command acts on the wrong project:
 
 ```bash
-uv run antioch project current --json
-uv run antioch project list --json
+antioch project current --json
+antioch project list --json
 ```
 
 `project current` prints the project the working directory selects (literal
 `null` in JSON outside any project); `project show` names one by name or id.
 
-A project needs at least one service; `services.sim` is the reserved,
-optional simulation service. A service-only stack (viewer, API, ROS tooling)
+A project needs at least one service. The optional name `services.sim`
+identifies the simulation service. A service-only stack (viewer, API, ROS tooling)
 is valid — Isaac commands refuse it until a `sim` service is declared. See
 `manifest.md` for the full contract.
 
@@ -62,37 +66,37 @@ message-build toolchain, or project-specific system packages. Install those
 in the project Dockerfile when the project needs them. Verify an image that
 you changed with `antioch services exec sim command -v TOOL` before dispatch.
 
-The `FROM antioch-sim/<engine>:<sim-version>` line is the cache boundary. A
-coordinate change invalidates the engine and every project layer. A changed
+The `FROM antioch-sim/<engine>:<sdk-version>` line is the first Docker image
+layer. Changing it rebuilds the engine and every project layer. A changed
 `apt-get` or `uv` instruction rebuilds that instruction and the layers after
 it; a changed source `COPY` rebuilds only the later project layers. Keep
 slow, stable system dependencies before source copies. Watch sync updates
 source without rebuilding, while a queued or saved run freezes the final
 image by digest.
 
-## Engine coordinate and SDK version
+## Simulation image and SDK version
 
-The sim image coordinate is `antioch-sim/<engine>:<sim-version>`, stamped by
-`antioch init`; the platform verifies the engine and SDK version from the
-image's labels. The coordinate pins the cloud engine and SDK version; edit it
-to upgrade an existing project. Add a Dockerfile only for custom dependencies
-and use the same coordinate in its `FROM` line. Install the public SDK from
-PyPI with the extra that should select the initial engine image and examples:
+`antioch init` writes `antioch-sim/<engine>:<sdk-version>` under
+`services.sim.image`. The engine name selects Isaac Sim or Isaac Lab, and the
+value after the colon selects the Antioch SDK installed in the cloud
+container. Change that image value to upgrade an existing project. Add a
+Dockerfile only for custom dependencies and copy the same value into its
+`FROM` line. Install the public SDK from PyPI with the engine option that
+should select the first image and examples:
 
 ```bash
 uv add --compile-bytecode "antioch-sim[isaac-601-ga]"
 ```
 
-The SDK wheel includes editor types for every supported engine. The extra does
+The SDK wheel includes editor types for every supported engine. The engine option does
 not install Isaac locally or limit which types are available.
 
-When the locally installed SDK version differs from the image coordinate's,
-the CLI warns and the **image remains authoritative** — the code runs against
-the image's SDK. Align the local pin with the coordinate to silence the
-warning and keep editor types exact.
+When the locally installed SDK version differs from the image's SDK version,
+the CLI warns you. The cloud simulation runs against the SDK inside the image.
+Use the same version locally when you want editor feedback to match it exactly.
 
 Do not add an engine selector to `antioch.yaml`; it has none. The built sim
-image's labels are the engine source of truth.
+image identifies the engine that runs in the cloud.
 
 ## Development flow versus an immutable run
 
@@ -103,7 +107,7 @@ sync/exec/restart/rebuild decision table) and start the loop with:
 antioch services up --watch
 ```
 
-The watcher arms before its initial reconciliation, batches file events,
+The watcher starts before its initial sync, batches file events,
 propagates deletes, and reports failures instead of reconnecting silently.
 `ports` open authenticated local tunnels
 while the stack is up. Ctrl-C ends the watcher but leaves containers and
@@ -112,15 +116,15 @@ running; use `antioch services down` to stop them. A bare `antioch services up`
 also opens declared ports and returns.
 
 When no watcher is running, `antioch run`, `scenario run`, and
-`suite run` perform one full current-tree reconciliation (including
-`.gitignore` and
-`.dockerignore` rules) before dispatch. This is the run-freshness guarantee.
+`suite run` sync and verify the latest project files, including `.gitignore`
+and `.dockerignore` rules, before they start.
 
 ## Use private-registry images
 
 An auxiliary service can use an image in your own registry. The `sim`
-service cannot: its `image` must stay an `antioch-sim/<engine>:<semver>`
-coordinate (or a Dockerfile build FROM one) — see `manifest.md`.
+service cannot: its `image` must stay a versioned
+`antioch-sim/<engine>:<sdk-version>` image, or its Dockerfile must start
+`FROM` one — see `manifest.md`.
 
 ```yaml
 services:
@@ -131,7 +135,7 @@ services:
 For an interactive pull, Antioch reads the same local Docker credential sources
 as Docker (`auths`, `credsStore`, and `credHelpers`) and sends the credential
 only with that Engine pull. For queued work, the submitter performs the
-credentialed pull and pushes a digest-pinned copy into your organization's
+credentialed pull and saves the exact image digest in your organization's
 private registry
 before the run is submitted:
 
@@ -144,16 +148,14 @@ registry credential. A missing local credential fails at the pull; Antioch
 never asks a queued worker to guess or persist a team secret.
 
 Scenario and suite run environments omit development `watch` rules and `ports`
-tunnels. Queued runs save their exact digest-pinned environment before Antioch
-distributes them. For a single-machine interactive run, Antioch captures the
-admitted `sim` container's project workspace at dispatch and then attempts to
-save the exact images and source the run used. When that capture and publish
-succeeds, `antioch scenario rerun SCENARIO_RUN_ID` and
+connections. Queued runs save their exact service images, project files, and
+inputs before they start. Antioch also attempts to save those files and images
+for a single-machine interactive run. When they are available,
+`antioch scenario rerun SCENARIO_RUN_ID` and
 `antioch suite rerun SUITE_RUN_ID` queue the completed run again exactly as it
 ran. Multi-machine interactive runs are not currently rerunnable. Repeat the
 original command or use `--queue` when the result must be rerunnable. Antioch
-explains when an older run or a failed source capture or publish leaves the
-environment unavailable.
+explains which files or images are unavailable when a run cannot be rerun.
 
 Write temporary frames, checkpoints, and debug files to `/workspace/output`.
 Use `antioch services cp sim:/workspace/output/FILE ./FILE` for an explicit

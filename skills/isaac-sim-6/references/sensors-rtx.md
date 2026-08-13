@@ -13,8 +13,8 @@ you.
 
 ## `SUPPORTED_LIDAR_CONFIGS` — the vendor catalog
 
-`isaacsim.sensors.experimental.rtx.SUPPORTED_LIDAR_CONFIGS` is the
-authoritative registry of vendor lidar/radar USD assets (NVIDIA examples,
+`isaacsim.sensors.experimental.rtx.SUPPORTED_LIDAR_CONFIGS` is the official
+list of vendor lidar/radar USD assets (NVIDIA examples,
 Ouster, HESAI, SICK, Slamtec, ZVISION). Keys are asset paths under
 `get_assets_root_path() + "/Isaac/Sensors/..."`; values are either a `set` of
 flat variant names (against the `"sensor"` variant set, named by the

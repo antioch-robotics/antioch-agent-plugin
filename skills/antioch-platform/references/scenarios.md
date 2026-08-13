@@ -46,12 +46,10 @@ dispatch type, phase, and outcome.
   `next_cursor` back as `--cursor` and keep fetching while it is non-null. A
   cursor pins its page's whole query — repeat no filters beside it.
 
-Scenario list and show JSON use a customer-facing projection rather than the
-Rome record. It keeps the run and suite identities, project, machine and
-dispatch provenance, authored inputs, lifecycle and outcome, timings, results,
-logs, artifacts, and capability flags. It does not include tenant IDs, raw
-user subjects, queue claims, assignment or process identities, attempt counts,
-or generation fields. The same projection is used for list rows and show.
+Scenario list and show JSON use the same customer-facing schema. It includes
+run and suite identities, project, machine and dispatch provenance, authored
+inputs, lifecycle and outcome, timings, results, logs, artifacts, and
+capability flags.
 
 ## Discovering filter values
 

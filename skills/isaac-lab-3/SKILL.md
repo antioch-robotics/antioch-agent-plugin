@@ -30,7 +30,7 @@ headlessly. Verify training through recorded curves, metrics, and artifacts,
 not only through the viewport.
 
 Queue workers run immutable images and do not apply development watch rules.
-Antioch adds the submitted project tree to the simulation image before the
+Antioch adds the submitted project files to the simulation image before the
 queue accepts it, whether `services.sim` names an image or a custom build.
 
 ## Research first

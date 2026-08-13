@@ -181,7 +181,7 @@ ScenarioRun.add_artifact(path: str | Path, *, name: str | None = None, content_t
 
 ## Default telemetry
 
-Every managed scenario, and every native `ScenarioSession`, records a
+Every Antioch scenario, and every native `ScenarioSession`, records a
 dashboard without a line of telemetry code:
 
 - **A read-back of Kit's active viewport.** Once physics is stepping, the
@@ -291,7 +291,7 @@ what it actually recorded:
 
 Interactive runs use one machine unless the caller passes `--machines` or
 repeats `--machine`. Queued runs use immutable images without development
-watch rules; Antioch adds the submitted project tree to the simulation image
+watch rules; Antioch adds the submitted project files to the simulation image
 before the queue accepts it.
 
 Deeper read-back — filtering run history, per-service logs, artifact keys,

@@ -1,6 +1,6 @@
 ---
 name: antioch-research
-description: The retrieval hub for the entire simulation substrate. Fires for ANY question, implementation, review, or debugging that touches Isaac Sim, Isaac Lab, Omniverse/Kit, OpenUSD, PhysX, Newton, Warp, cuRobo, skrl, rsl-rl, Cosmos, NuRec, Isaac ROS, or Rerun — the research_* MCP tools are the canonical lookup verb for those surfaces and beat memory, upstream websites, and every other skill at API detail. One research_search spans all 19 indexed corpora, including pinned source for Isaac Sim, Isaac Lab, rsl-rl, Warp, and cuRobo. Load this before writing, porting, reviewing, or debugging any code on those stacks; whenever an API signature, parameter semantics, default, error string, or source behavior is in question; and when grounding or verifying any claim about them. Teaches the search -> expand/open loop, detailed-query style, kind='source' code localization, and grep for exact symbols. Not for Antioch platform or CLI questions (antioch-platform) or vendors outside the index (web research).
+description: The retrieval hub for the entire simulation substrate. Fires for ANY question, implementation, review, or debugging that touches Isaac Sim, Isaac Lab, Omniverse/Kit, OpenUSD, PhysX, Newton, Warp, cuRobo, skrl, rsl-rl, Cosmos, NuRec, Isaac ROS, or Rerun — the research_* MCP tools are the canonical lookup verb for those surfaces and beat memory, upstream websites, and every other skill at API detail. One research_search spans all 19 indexed corpora, including pinned source for Isaac Sim, Isaac Lab, rsl-rl, Warp, and cuRobo. Load this before writing, porting, reviewing, or debugging any code on those stacks; whenever an API signature, parameter semantics, default, error string, or source behavior is in question; and when grounding or verifying any claim about them. Teaches the search, expand, and open loop, detailed-query style, kind='source' code localization, and grep for exact symbols. Not for Antioch platform or CLI questions (antioch-platform) or vendors outside the index (web research).
 ---
 
 # Antioch Research
@@ -157,8 +157,8 @@ research_expand(artifact="abc123", ordinal=7)   # neighboring methods
 research_open(artifact="abc123")                # the whole runtime, if needed
 ```
 
-**Pass `kind='source'` when localizing code for a bug or feature.** On the
-internal edit-recall benchmark (107 tasks mined from real Isaac Lab PRs),
+**Pass `kind='source'` when localizing code for a bug or feature.** On a
+107-task edit-recall benchmark mined from real Isaac Lab PRs,
 task-aware `kind='source'` filtering measured **+5.6 points** of recall@10
 over the unfiltered baseline. It is not unconditional: when a query is
 already code-shaped, ranking returns source anyway and the filter only
@@ -266,7 +266,7 @@ their citations, is the intended use.
 * **401 / "not authenticated"** — the local credential store is missing or
   stale. Ask the user to run `antioch auth login`; the server re-reads the
   store on every call, so no restart is needed.
-* **Evidence-floor abstention / "not in the index"** — Rome returns no hits
+* **Evidence-floor abstention / "not in the index"** — Antioch Research returns no hits
   when the best rerank score is below the evidence floor. Tell the user the
   answer is outside the indexed corpora. Do not improvise from adjacent hits
   or present them as evidence; call `research_versions` when the boundary is

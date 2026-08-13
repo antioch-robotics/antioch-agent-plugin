@@ -44,8 +44,8 @@ opt out with an explicit supported value — `network_mode: none` or `bridge`,
 sharing; `manifest.md` owns the complete value sets. A service needed only by
 selected runs can carry an auxiliary `profiles` value. Use `antioch services up --watch` for the live graph; it is
 foreground, and Ctrl-C leaves containers running until `antioch services
-down`. Queued runs use a digest-pinned environment without development watch
-rules.
+down`. Queued runs use their saved service images, project files, and inputs
+without development watch rules.
 
 ## Build a C++ workspace
 

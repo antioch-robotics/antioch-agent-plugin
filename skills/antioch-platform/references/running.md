@@ -1,6 +1,6 @@
 # Running code and scenarios
 
-Antioch has two execution surfaces. `antioch run` is a one-off probe whose
+Antioch runs simulation code in two main ways. `antioch run` is a one-off probe whose
 stdout, stderr, and exit status belong to the Python process. `antioch scenario
 run` selects authored scenarios and records their outcome, parameters, logs,
 telemetry, and artifacts. Both need a `services.sim` entry in the manifest —
@@ -70,7 +70,7 @@ Foreground scenario output is a live board and deliberately has no JSON
 output. Two escalations exist when the board hides what you need:
 `--verbose` relays the process output while filtering Kit engine noise, and
 `--raw-logs` relays every byte unfiltered (it implies `--verbose`). Read
-durable truth after the run finishes:
+the saved result after the run finishes:
 
 ```bash
 antioch scenario show SCENARIO_RUN_ID --json
@@ -86,13 +86,12 @@ Add `--queue` to a scenario selection to submit it headlessly:
 antioch scenario run --scenario bin_pick --queue --json
 ```
 
-The submitter builds or resolves every selected service **on the project's
-current machine** — `machine checkout` selects that staging machine — adds
-the current project source to the simulation image, and retains the
-digest-pinned
-environment with the run. Antioch then distributes runs across eligible
-machines that are independent of the stager. Development `watch` rules and
-`ports` tunnels are absent from the queued environment.
+The submitter builds or finds every selected service **on the project's current
+machine**. Use `machine checkout` when you need to select one of several assigned
+machines. Antioch adds the current project files to the simulation image, saves
+the exact images and run inputs, and then distributes the work across other
+eligible machines. Development `watch` rules and `ports` connections are not
+included in queued runs.
 
 Queue flag constraints: do not combine `--queue` with a typed `--stream`,
 with `--verbose` or `--raw-logs`, or with `--machine` or `--machines` — each
@@ -102,28 +101,28 @@ queued or running standalone scenario with
 `antioch scenario cancel SCENARIO_RUN_ID --json`; suite members are cancelled
 through `suite cancel` (`suites.md`).
 
-Queued runs save their exact digest-pinned environment before Antioch
-distributes them. For a single-machine interactive run, Antioch captures the
-admitted `sim` container's project workspace at dispatch and then attempts to
-save the exact images and source the run used. When that capture and publish
+Queued runs save their exact service images, project files, and inputs before
+Antioch distributes them. For a single-machine interactive run, Antioch captures
+the files in the `sim` container and then attempts to save the exact images and
+files the run used. When that capture and publish
 succeeds,
 `antioch scenario rerun SCENARIO_RUN_ID` and `antioch suite rerun SUITE_RUN_ID`
-queue the completed run again with the same images, parameters, and cases, and
-a fresh identity. Multi-machine interactive runs are not currently rerunnable.
+queue the completed run again with the same images, files, parameters, and
+cases, under a new run ID. Multi-machine interactive runs are not currently rerunnable.
 Repeat the original command or use `--queue` when the result must be rerunnable.
 Antioch explains when an older run or a failed source capture or publish leaves
 the environment unavailable.
 
-When no watcher is running, every `run` and scenario or
-suite dispatch reconciles the current tree once before it starts. A live watcher
-already owns that publication, so edits are never hidden behind a stale upload.
+When no watcher is running, every script, scenario, and suite run syncs the
+latest project files once before it starts. A live watcher already keeps those
+files current.
 
 ## Streaming and failures
 
 Simulation runs stream by default. `--no-stream` makes a run headless, while an
 explicit `--stream` requires the machine's single livestream lease. A busy
 lease makes an explicit request fail; an unqualified default can continue
-headlessly with a notice. Queued runs are headless by contract.
+headlessly with a notice. Queued runs are always headless.
 `antioch services exec` never reserves the livestream — the lease is taken by
 default by `antioch run`, `scenario run`, and `suite run`, and declared for a
 kernel by `antioch jupyter stream` (`sessions.md`).

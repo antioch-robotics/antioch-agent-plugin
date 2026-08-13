@@ -67,7 +67,7 @@ def publish_dataset(run: "antioch.ScenarioRun", output_dir: Path, name: str) -> 
 This is how SDG gets big on Antioch — not local parallel processes. Declare one
 **case per seed / scene variant / episode shard**, save the selection as a
 suite in `antioch.yaml`, then queue the whole sweep as one asynchronous batch.
-Antioch adds the submitted project tree to the simulation image because queue
+Antioch adds the submitted project files to the simulation image because queue
 workers do not apply development watch rules.
 
 ```yaml
@@ -211,7 +211,7 @@ Key rules for this loop:
 
 Scenario params are scalars, so keep the structured config — object lists,
 annotation toggles, camera bounds — in a YAML file **inside the project** (the
-current project tree carries it); params/cases override the sweep dimensions:
+current project files include it); params/cases override the sweep dimensions:
 
 ```yaml
 # configs/warehouse_sdg.yaml — read from the scenario body with yaml.safe_load

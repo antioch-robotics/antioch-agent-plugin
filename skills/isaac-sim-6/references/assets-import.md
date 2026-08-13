@@ -24,7 +24,7 @@ The importer maps ROS package names to filesystem paths via
 The resolved meshes must exist on the machine at those paths. Keep the
 description package, including its meshes, inside the project. A declared
 `sync` watch rule copies it during interactive work; Antioch adds the submitted
-project tree to the simulation image for queued runs. Pass the corresponding
+project files to the simulation image for queued runs. Pass the corresponding
 remote absolute path to the importer. Publish a robot description that several
 projects need as an Antioch asset; `antioch-platform` covers the asset commands.
 

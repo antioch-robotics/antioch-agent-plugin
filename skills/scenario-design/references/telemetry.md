@@ -10,7 +10,7 @@ release.
 
 ## Live versus recorded
 
-Every `ScenarioSession` opens a file sink. A managed scenario finalizes that
+Every `ScenarioSession` opens a file sink. An Antioch scenario finalizes that
 file and uploads it under the reserved `telemetry` artifact (content type
 `application/vnd.rerun.rrd`). That durable `.rrd` is the run's evidence and it
 exists whether or not anyone watched.
@@ -182,4 +182,4 @@ rerun rrd print <file> | head
 
 On a read-only filesystem the CLI may print `ERROR re_analytics: Failed to
 initialize analytics` — upstream telemetry noise, not a verification failure.
-The stats that follow are authoritative.
+Use the statistics that follow; the warning does not change them.

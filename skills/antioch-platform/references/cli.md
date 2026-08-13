@@ -30,12 +30,12 @@ and exit 0. An unknown name gets a "did you mean" suggestion.
 
 | Command | Purpose | Key options | JSON |
 |---|---|---|---|
-| `scenario list` | Filter tenant-shared run history | `-q/--search`, `--scenario`, `--project`, `--suite`, `--suite-run-id`, `--invocation-id`, `--dispatched-from`, `--user`/`--mine`, `-t/--tag`, `--no-suite`, `--param`, `--result`, `--since`/`--until`, `--dispatch`, `--phase`, `--outcome`, `--cursor`, `--limit` (1–200, 50) | `{items, next_cursor}` of curated run records |
-| `scenario show SCENARIO_RUN_ID` | One run: phase, outcome, params, results, checks, artifact index | `--logs`, `--service` (requires `--logs`) | curated record |
+| `scenario list` | Filter organization-shared run history | `-q/--search`, `--scenario`, `--project`, `--suite`, `--suite-run-id`, `--invocation-id`, `--dispatched-from`, `--user`/`--mine`, `-t/--tag`, `--no-suite`, `--param`, `--result`, `--since`/`--until`, `--dispatch`, `--phase`, `--outcome`, `--cursor`, `--limit` (1–200, 50) | `{items, next_cursor}` of run records |
+| `scenario show SCENARIO_RUN_ID` | One run: phase, outcome, params, results, checks, and saved artifact names | `--logs`, `--service` (requires `--logs`) | run record |
 | `scenario logs SCENARIO_RUN_ID` | Replay captured output — stdout to stdout, stderr to stderr | `--stdout`/`--stderr` (exclusive), `-f/--follow`, `--raw-logs` | `{items, next_cursor: null}` of log entries |
 | `scenario download SCENARIO_RUN_ID` | Signed-storage artifact download into `./SCENARIO_RUN_ID/` | `--artifact` (repeatable, logical key), `-o/--output`, `--force` | transfer manifest with per-file `sha256` |
 | `scenario cancel SCENARIO_RUN_ID` | Cancel a standalone queued or running scenario run | — | cancellation object with `changed` |
-| `scenario rerun SCENARIO_RUN_ID` | Queue a completed run again from its saved environment | — | bare array of queued records |
+| `scenario rerun SCENARIO_RUN_ID` | Queue a completed run again from its saved environment | — | the queued run record |
 | `scenario delete` | Delete standalone runs you own | `--run` (repeatable), `--yes` | requires `--yes` |
 | `scenario suggest FIELD` | Distinct stored values and counts for one filter field: `user_email`, `tag`, `suite`, `scenario`, `project`, or `dispatched_from`; optional `PREFIX` positional | `--limit` (1–100, 20) | `{items, next_cursor: null}` |
 | `scenario collect` | Local discovery and validation; no network, no machine | optional `PATH` positional | `{items, next_cursor: null}` of definitions |
@@ -44,9 +44,9 @@ and exit 0. An unknown name gets a "did you mean" suggestion.
 
 | Command | Purpose | Key options | JSON |
 |---|---|---|---|
-| `suite list` | Suite runs; the current project is the default filter inside a project | `--suite`, `--project`, `--all-projects`, `--phase`, `--outcome`, `--user`/`--mine`, `--since`/`--until`, `--dispatch`, `--cursor`, `--limit` | `{items, next_cursor}` of curated suite records |
-| `suite summary` | Named suites with latest-run state | `-q/--search` plus the `list` filters, `--limit` (1–500, 50) | `{items, next_cursor}` of curated summaries |
-| `suite show SUITE_RUN_ID` | One suite run with its member scenario runs | `--suite` (only for a legacy id), `-f/--follow` | curated object; `--follow --json` is NDJSON state frames ending in a `completed` frame |
+| `suite list` | Suite runs; the current project is the default filter inside a project | `--suite`, `--project`, `--all-projects`, `--phase`, `--outcome`, `--user`/`--mine`, `--since`/`--until`, `--dispatch`, `--cursor`, `--limit` | `{items, next_cursor}` of suite records |
+| `suite summary` | Named suites with latest-run state | `-q/--search` plus the `list` filters, `--limit` (1–500, 50) | `{items, next_cursor}` of summaries |
+| `suite show SUITE_RUN_ID` | One suite run with its member scenario runs | `--suite` (only for a legacy id), `-f/--follow` | suite record; `--follow --json` is NDJSON state frames ending in a `completed` frame |
 | `suite cancel SUITE_RUN_ID` | Cancel unclaimed members and signal active processes | — | adds `changed` |
 | `suite rerun SUITE_RUN_ID` | Queue a completed suite again | — | bare queued suite object |
 | `suite delete` | Delete suite runs AND their member scenario runs | `--run`, `--suite` (both repeatable), `--yes` | requires `--yes` |
@@ -56,8 +56,8 @@ and exit 0. An unknown name gets a "did you mean" suggestion.
 
 | Command | Purpose | Key options | JSON |
 |---|---|---|---|
-| `machine list` | Your assignments (personal, never another user's) | `--project`, `--all` | bare array of curated rows: id, urls, GPU, placement, state, generation, project, `dispatched_from`, `current` |
-| `machine status` | One machine plus live daemon facts: processes, stream, containers | `--project`, `--machine` | bare object |
+| `machine list` | Your assignments (personal, never another user's) | `--project`, `--all` | bare array of rows: id, urls, GPU, placement, state, generation, project, `dispatched_from`, `current` |
+| `machine status` | One machine plus live process, stream, and container state | `--project`, `--machine` | bare object |
 | `machine checkout` | Set the project's current machine (git-checkout analogy); local, allocates nothing; optional `MACHINE` positional | `--none` clears | mutation result; bare invocation prints the current machine id on stdout |
 | `machine release` | Release one assignment and stop its work; **idempotent** — already-released is success; optional `MACHINE` positional | `--project`, `--machine` | released assignment |
 | `machine ssh [CMD]...` | VM host shell; a one-shot CMD runs without a PTY, exit status is the command's | `--machine` | none — interactive/relayed |
@@ -68,7 +68,7 @@ and exit 0. An unknown name gets a "did you mean" suggestion.
 | Command | Purpose | Key options | JSON |
 |---|---|---|---|
 | `services up` | Build changed services, start, wait for health; may allocate | `--profile` (repeatable), `--watch` (foreground; cannot combine with `--json`) | stack state |
-| `services down` | Stop and remove project services; resolve-only | — | teardown object |
+| `services down` | Stop and remove project services; requires an assigned machine and never assigns one | — | teardown object |
 | `services ps` | Inspect state without allocating | — | stack state |
 | `services logs` | Stream raw container bytes; optional `SERVICE` positional | `-f/--follow`, `--tail`, `--since` | none — raw stream |
 | `services restart` | Restart in dependency order, no rebuild | `--service` (repeatable) | restarted services |
@@ -83,12 +83,12 @@ and exit 0. An unknown name gets a "did you mean" suggestion.
 
 | Command | Purpose | Key options | JSON |
 |---|---|---|---|
-| `assets list` | Organization assets plus the shared Antioch shelf | `-q/--search`, `--cursor`, `--limit` (1–200, 50) | `{items, next_cursor}` |
+| `assets list` | Organization assets plus Antioch's shared library | `-q/--search`, `--cursor`, `--limit` (1–200, 50) | `{items, next_cursor}` |
 | `assets show ASSET` | One asset with its published versions | `-v/--version` | bare object |
 | `assets push PATH` | Publish one immutable version | `-n/--name`, `-v/--version` (**required**), `-d/--description`, `--content-type`, `--preview` | published version |
 | `assets pull ASSET` | Signed-storage download | `-v/--version` (latest), `-o/--output`, `--preview`, `--force` | transfer manifest |
 | `assets verify ASSET` | Temp-download and integrity check; nonzero exit on failure | `-v/--version` | none |
-| `assets repair ASSET` | Remove versions whose stored object is missing | `-v/--version` (default: every version) | `{asset, asset_id, removed, kept}` |
+| `assets repair ASSET` | Remove published versions whose file is missing | `-v/--version` (default: every version) | `{asset, asset_id, removed, kept}` |
 | `project current` | Project selected by the working directory | — | bare object; literal `null` outside any project |
 | `project list` | Locally known projects | — | bare array |
 | `project show` | One local project by name or id; optional `PROJECT` positional | — | bare object |
@@ -121,17 +121,14 @@ kernels are live. JSON outputs are bare objects.
 | `ANTIOCH_ENV` | Deployment profile: `staging` (default) or `prod`. Set it before `auth login` and keep it set — credentials are stored per environment. |
 | `ANTIOCH_CONFIG_DIR` | Exact config-directory override. Isolates credentials and allocations per agent or test run without touching the user's store. |
 | `XDG_CONFIG_HOME` | Config root when no override; default `~/.config`. |
-| `ANTIOCH_ROME_URL`, `ANTIOCH_ROME_CA_BUNDLE`, `ANTIOCH_CA_BUNDLE` | Control-plane and daemon TLS overrides for development stacks; refused against prod. |
 | `ANTIOCH_WORKSPACE_ID` | Set by Mission Control inside a workspace; switches the dispatch origin to `cloud-workspace`. Not user-set. |
 | `ANTIOCH_ENGINE`, `ANTIOCH_SCENARIO_*` | Injected into containers and dispatched processes by Antioch. Never set these. |
 
 ## Credential store
 
-`$ANTIOCH_CONFIG_DIR` or `$XDG_CONFIG_HOME/antioch/<environment>/` — staging
-and prod credentials cannot collide. Contents: `auth.json` (device-flow
-session, owner-only permissions), `workspace.json` (a Mission Control bearer
-pushed by the platform; it wins over `auth.json` when present),
-`machines.json` (allocation and checkout cache), and per-assignment SSH keys.
+Antioch stores credentials and local machine state under
+`$ANTIOCH_CONFIG_DIR` or `$XDG_CONFIG_HOME/antioch/<environment>/`. Deployment
+profiles use separate directories, so their sessions cannot collide.
 
 ## stdout vs stderr
 
@@ -147,7 +144,7 @@ run's stdout to stdout and stderr to stderr.
 
 - Listing commands emit `{"items": [...], "next_cursor": <string or null>}`.
   Detail and mutation commands emit a bare object; `machine list`,
-  `jupyter kernels`, `project list`, and `scenario rerun` emit a bare array.
+  `jupyter kernels`, and `project list` emit a bare array.
 - Every `*_at` field is an integer Unix timestamp in **microseconds**.
 - Cursors are opaque and pin the complete query — pass `--cursor` alone;
   repeating a filter beside it is a usage error.

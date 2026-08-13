@@ -48,24 +48,23 @@ antioch suite run acceptance --queue --json
 antioch suite show SUITE_RUN_ID --follow --json
 ```
 
-Queueing is the immutable-environment boundary. The submitter builds the
-selected project services **on the project's current machine** — use
-`machine checkout` to pick the stager — adds the current project source to
-the simulation image,
+For a queued suite, the submitter builds the selected project services **on the
+project's current machine**. Use `machine checkout` when you need to select one
+of several assigned machines. Antioch adds the current project files to the simulation image,
 pulls private images with the local Docker credential, and pushes the resolved
 images into your organization's private registry. Antioch distributes the
 suite's scenario runs
-across eligible machines that run independently of the staging machine.
+across other eligible machines.
 Queued workers are headless; development `watch`
 rules and `ports` tunnels are not part of the queued environment. Do not
 combine `--queue` with a typed `--stream`, `--verbose`, `--raw-logs`,
 `--machine`, or `--machines`; `--json` on `suite run` requires `--queue`
 (`running.md` explains the constraints).
 
-Queued runs save their exact digest-pinned environment before Antioch
-distributes them. For a single-machine interactive suite run, Antioch captures
-the admitted `sim` container's project workspace at dispatch and then attempts
-to save the exact images and source the suite run used. When that capture and
+Queued runs save their exact service images, project files, and inputs before
+Antioch distributes them. For a single-machine interactive suite run, Antioch
+captures the files in the `sim` container and then attempts to save the exact
+images and files the suite run used. When that capture and
 publish succeeds, queue the completed suite again exactly as it ran:
 
 ```bash
@@ -107,13 +106,11 @@ queued or running work by its suite-run id:
 antioch suite cancel SUITE_RUN_ID --json
 ```
 
-Suite list, summary, and show JSON use a customer-facing projection. It keeps
-suite and scenario identities, project and dispatch provenance, lifecycle and
-outcome, child counters, timings, results, logs, artifacts, and rerun
-capabilities. It omits tenant keys, raw user subjects, queue claims,
-assignment and process identities, attempt counts, and generation fields. The
-member records inside `suite show` use the same scenario projection as
-`scenario list` and `scenario show`.
+Suite list, summary, and show JSON include suite and scenario identities,
+project and dispatch provenance, lifecycle and outcome, child counters,
+timings, results, logs, artifacts, and rerun capabilities. Member records
+inside `suite show` use the same customer-facing schema as `scenario list`
+and `scenario show`.
 
 Finished member scenarios remain in the suite history; unclaimed queued runs are
 cancelled and active processes are signalled. Check `antioch suite cancel

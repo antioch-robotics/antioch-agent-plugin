@@ -19,41 +19,42 @@ description: >
 
 # The Antioch platform
 
-## The first move is the CLI
+## Start with the workflow that matches the task
 
-The workspace or checkout you are in is a seat for dispatching work to GPU
-machines. It is not an unknown Linux box. For any Antioch task, your first
-substantive action is a formed `antioch` command, not filesystem or package
-exploration. The platform reports its own state; ask it.
+Run `antioch` from the project directory with its Python environment active.
+In a uv project whose environment is not active, prefix a command with
+`uv run`. Use the shortest loop that fits the work:
 
-The default loop for any task:
+- **Develop the stack:** inspect `antioch.yaml`, run `antioch services up
+  --watch`, then use `services ps` and `services logs` to verify it.
+- **Run a Python program:** use `antioch run FILE`, then read its output and
+  exit status.
+- **Run a scenario:** collect definitions, dispatch the selection, then read
+  the recorded outcome, checks, logs, telemetry, and artifacts.
+- **Run a suite:** collect its expanded selection, dispatch it, then inspect
+  the suite and its scenario runs.
+- **Work interactively:** start a Jupyter kernel, run cells against the live
+  simulator, inspect the kernel, and stop it when finished.
 
-```bash
-uv run antioch scenario collect --json      # 1. what is authored here?
-uv run antioch machine status               # 2. what is my seat attached to?
-uv run antioch scenario run --scenario X    # 3. dispatch (streams by default)
-uv run antioch scenario show SCENARIO_RUN_ID --json  # 4. read the verdict and results
-```
+Prefer Antioch's status, history, and log commands to guessing from local
+files or installed packages. Durable scenario and suite work is not complete
+until you read back the recorded result.
 
-Adapt steps, never the order of ideas: discover -> dispatch -> read back.
-`find`, `pip`, `ls`, and reading installed packages are the fallback when a
-platform surface has no answer — never the opening.
-
-## Postures are decisions, not flags
+## Choose how the work should run
 
 Choose deliberately and be able to state the rule:
 
 | Decision | Rule |
 |---|---|
 | `antioch run FILE` vs `scenario run` | `run` when the output and exit status are the whole story (a probe). A scenario when results, checks, logs, or artifacts must be retained — history is the product. |
-| interactive vs `--queue` | Interactive holds your machine and streams — right for one iteration loop. `--queue` for sweeps, batches, or anything above one concurrent run: it saves a digest-pinned environment and fans out across eligible machines. A parameter sweep is always `--queue`, never serial interactive runs. |
-| stream vs detach | Interactive dispatch streams by default; stay attached — dispatch verdicts and failures surface live. Detach only for long runs you will poll with `suite show --follow --json`. |
+| interactive vs `--queue` | Use interactive execution while an engineer or agent is attached and wants fast feedback or a livestream. Interactive scenarios and suites can fan out with `--machines`. Use `--queue` when work should outlive the terminal, run from CI or a schedule, or execute unattended with its service images and project files saved. |
+| stream vs headless | Interactive dispatch streams by default. Use `--no-stream` when the GUI is unnecessary; queued work is always headless. |
 | hold vs release | Keep the machine while iterating (allocation is the slow step). `machine release` when you switch projects or stop for hours; queued work needs no held machine. |
-| dispatch vs preview | When selection is in doubt, `scenario collect --json` and `suite show <name>` preview exactly what would run — cheaper than a wrong dispatch. |
+| dispatch vs preview | When selection is in doubt, use `antioch scenario collect --json` and `antioch suite collect --json` to preview exactly what would run. |
 
 ## When something fails, ask the platform first
 
-The first three actions after any failure are platform surfaces, in this
+Run these three checks after a failure, in this
 order — not `find`, not `pip`, not rerunning the same command three ways:
 
 1. **The run**: `antioch scenario show SCENARIO_RUN_ID --json` (status, checks,
@@ -61,8 +62,8 @@ order — not `find`, not `pip`, not rerunning the same command three ways:
    for one service).
 2. **The stack**: `antioch services ps`, `antioch services logs <svc>` —
    is the environment the run needed actually up and healthy?
-3. **The seat**: `antioch machine status`, `antioch auth whoami`,
-   `uv run antioch --version` — what does the platform think is assigned,
+3. **Identity and machine**: `antioch machine status`, `antioch auth whoami`,
+   `antioch --version` — what does the platform think is assigned,
    authenticated, and installed?
 
 Every `--json` failure emits a structured error document on stderr with a
@@ -102,7 +103,7 @@ catalog, and the machine are seconds away; a guess is a burned turn.
   cell by cell: start a Jupyter kernel (`references/sessions.md`) instead of
   round-tripping whole scripts.
 - **Running inside Mission Control** — `ANTIOCH_WORKSPACE_ID` in the
-  environment means the hosted workspace seat: ephemeral filesystem, refused
+  environment means the hosted authoring environment: ephemeral filesystem, refused
   auth verbs, `dispatched_from` provenance. Load
   `references/mission-control.md` the moment that variable appears.
 - **Any question about the simulation substrate** — Isaac Sim, Isaac Lab,
@@ -127,24 +128,24 @@ Run commands from the project directory and keep the project interpreter
 explicit while checking the installation:
 
 ```bash
-uv run antioch --version
-uv run antioch --help
+antioch --version
+antioch --help
 ```
 
 The help output is the authority for flags and subcommands. This skill teaches
 the workflow and common examples; `references/cli.md` maps the complete
 command tree, the JSON and exit-code contracts, and the plays agents
-underuse, and `uv run antioch <command> --help` settles any remaining detail.
+underuse, and `antioch <command> --help` settles any remaining detail.
 
 Antioch keeps application code ordinary Isaac Python. The platform contributes
 an assigned GPU machine, flexible project services, scenario history,
 suite selection, and direct artifact access around that code.
 
-## The project boundary
+## How a project is defined
 
-A project is rooted at `antioch.yaml`. The manifest owns the complete stack:
-one `services` mapping that must declare at least one service. `sim` is the
-reserved simulation service — structural, not a label convention. It is
+A project is rooted at `antioch.yaml`. That file defines every container in
+one `services` mapping and must declare at least one service. The name `sim`
+has a specific purpose: it identifies the simulation service. It is
 **optional**: a service-only stack (a viewer, an API, ROS tooling) is valid,
 but the commands that run Isaac code — `antioch run`, scenarios, suites,
 Jupyter — refuse a stack without it. The kept service keys are deliberately
@@ -168,7 +169,6 @@ services:
       - action: sync
         path: .
         target: /workspace/project
-        ignore: [".git/", ".venv/", "__pycache__/"]
   ros:
     image: ros:jazzy
     healthcheck:
@@ -191,12 +191,13 @@ authenticated local tunnels to host-network ports, not a service-name network.
 Environment names beginning with
 `ANTIOCH_` and labels in `antioch.*` or `com.docker.*` are reserved.
 
-The sim image coordinate `antioch-sim/<engine>:<sim-version>` selects the
-engine (`isaac-601-ga` or `isaac-lab-30b2`) and pins its Antioch SDK version;
-edit the coordinate to upgrade. The engine extra used to install the SDK tells
-`antioch init` which coordinate and examples to write first. The public SDK
+The `sim` image name `antioch-sim/<engine>:<sdk-version>` selects the engine
+(`isaac-601-ga` or `isaac-lab-30b2`) and the Antioch SDK installed in the
+cloud container. Change the version after the colon to upgrade it. The engine
+option used to install the SDK tells `antioch init` which image and examples
+to write first. The public SDK
 wheel includes typing for every supported engine. Add a Dockerfile only for
-custom dependencies and use the selected coordinate in its `FROM` line. The
+custom dependencies and use the selected image in its `FROM` line. The
 platform verifies the engine and SDK version from the image's labels.
 Keep `pxr`, `omni`, `carb`, `isaacsim`, and `isaaclab*`
 imports lazy so local scenario discovery works without a simulator installed.
@@ -212,7 +213,7 @@ imports lazy so local scenario discovery works without a simulator installed.
 - **Asset** — an immutable file revision shared with the organization.
 - **Organization** — the visibility boundary for scenario history, suite
   history, assets, and usage. Machine assignments remain personal.
-- **Mission Control workspace** — the hosted authoring seat in the webapp:
+- **Mission Control workspace** — the hosted authoring environment in the webapp:
   one ephemeral per-user environment with the CLI signed in, examples, hosted
   JupyterLab, and an agent terminal (`references/mission-control.md`).
 
@@ -221,7 +222,7 @@ imports lazy so local scenario discovery works without a simulator installed.
 Start a development stack with a foreground watcher:
 
 ```bash
-uv run antioch services up --watch
+antioch services up --watch
 ```
 
 `services up` may allocate or reuse the project's machine, builds changed services,
@@ -231,8 +232,8 @@ Ctrl-C ends that watch session but leaves containers and declared ports running;
 `antioch services down` to stop them. A bare `services up` also opens declared ports.
 `build`, `run`, scenario/suite dispatch, and Jupyter start are the other
 operations that may allocate or prepare a machine. Without a running watcher,
-each run reconciles the current tree once before dispatch, so it never silently
-uses stale source.
+each run syncs and verifies the current project files before it starts, so it
+never silently uses stale source.
 
 For authoring or reviewing a scenario — declaring cases, modelling pass/fail
 with `run.check`, logging scalars/images/transforms, the live-vs-recorded
@@ -241,13 +242,14 @@ with `run.check`, logging scalars/images/transforms, the live-vs-recorded
 Observe or tear down an existing stack without allocation:
 
 ```bash
-uv run antioch services ps
-uv run antioch services logs sim
-uv run antioch services down
-uv run antioch machine status
+antioch services ps
+antioch services logs sim
+antioch services down
+antioch machine status
 ```
 
-`services ps`, `services logs`, and `services down` are resolve-only.
+`services ps`, `services logs`, and `services down` require an assigned machine
+and never assign one.
 `services restart` and `services build` address the
 existing project; check their help for the current service-selection behavior.
 
@@ -255,36 +257,36 @@ Direct container access names the service; `ssh` alone defaults to `sim` when
 that service exists:
 
 ```bash
-uv run antioch services exec sim nvidia-smi
-uv run antioch services ssh
-uv run antioch services cp sim:/workspace/output/result.png ./result.png
+antioch services exec sim nvidia-smi
+antioch services ssh
+antioch services cp sim:/workspace/output/result.png ./result.png
 ```
 
 `exec` and `cp` always take an explicit service, for example
-`uv run antioch services exec ros bash -c "source /opt/ros/jazzy/setup.bash && ros2 topic list"`
+`antioch services exec ros bash -c "source /opt/ros/jazzy/setup.bash && ros2 topic list"`
 (`exec` skips the image entrypoint, so source the environment a stock ROS image
 prepares there). These verbs resolve an existing
-assignment and do not allocate one. `uv run antioch machine ssh` targets the VM shell.
+assignment and do not allocate one. `antioch machine ssh` targets the VM shell.
 
 Preview authored definitions before dispatching:
 
 ```bash
-uv run antioch scenario collect --json
-uv run antioch scenario run --scenario pick_and_place
-uv run antioch scenario run --tag warehouse --path scenarios
+antioch scenario collect --json
+antioch scenario run --scenario pick_and_place
+antioch scenario run --tag warehouse --path scenarios
 ```
 
 Inspect a completed run and its saved outputs:
 
 ```bash
-uv run antioch scenario show SCENARIO_RUN_ID --json
-uv run antioch scenario logs SCENARIO_RUN_ID
-uv run antioch scenario show SCENARIO_RUN_ID --logs --service sim
-uv run antioch scenario download SCENARIO_RUN_ID
+antioch scenario show SCENARIO_RUN_ID --json
+antioch scenario logs SCENARIO_RUN_ID
+antioch scenario show SCENARIO_RUN_ID --logs --service sim
+antioch scenario download SCENARIO_RUN_ID
 ```
 
 The webapp has the same per-service log selector. `antioch machine status`
-surfaces the direct machine URL and stream address when available. For host
+prints the direct machine URL and stream address when available. For host
 diagnostics, run `antioch machine ssh`; Docker runs underneath the stack, so raw
 `docker ps`, `docker logs`, and `docker exec` are supported from that VM shell.
 
@@ -295,34 +297,32 @@ artifacts must be retained.
 Suites are named selections, not positional scenario selectors:
 
 ```bash
-uv run antioch suite run acceptance
-uv run antioch suite run acceptance --queue --json
-uv run antioch suite show SUITE_RUN_ID --follow --json
+antioch suite run acceptance
+antioch suite run acceptance --queue --json
+antioch suite show SUITE_RUN_ID --follow --json
 ```
 
-Queueing saves a digest-pinned environment before Antioch distributes the
-scenario runs across eligible machines. Development `watch` rules and tunnels
-do not enter that immutable environment.
+Before queueing, Antioch saves the exact service images, project files, and
+inputs that the scenario runs will use. Development `watch` rules and port
+connections are not included.
 
 ## Reruns
 
-Queued runs save their exact digest-pinned environment before Antioch
-distributes them. For a single-machine interactive run, Antioch captures the
-admitted `sim` container's project workspace at dispatch and then attempts to
-save the exact images and source the run used. When that capture and publish
-succeeds, queue the completed run again exactly as it ran — same images,
+Queued runs save their exact service images, project files, and inputs before
+they start. Antioch also attempts to save those files and images for a
+single-machine interactive run. When they are available, queue the completed
+run again exactly as it ran — same images,
 parameters, and cases, with a fresh identity:
 
 ```bash
-uv run antioch scenario rerun SCENARIO_RUN_ID
-uv run antioch suite rerun SUITE_RUN_ID
+antioch scenario rerun SCENARIO_RUN_ID
+antioch suite rerun SUITE_RUN_ID
 ```
 
 The webapp's Re-run button is the GUI twin of these commands.
 Multi-machine interactive runs are not currently rerunnable. Repeat the
 original command or use `--queue` when the result must be rerunnable. Antioch
-explains when an older run or a failed source capture or publish leaves the
-environment unavailable.
+explains which files or images are unavailable when a run cannot be rerun.
 
 ## Deep references
 
@@ -333,7 +333,7 @@ appears, not after a failed guess:
 |---|---|
 | `references/manifest.md` | authoring or editing ANY part of `antioch.yaml` — the complete schema: every key, default, and constraint, the sim service contract, build and watch mechanics, rejected keys with remedies, and worked example manifests |
 | `references/cli.md` | orienting on the CLI as a whole — the full command map with options and JSON shapes, global environment variables, the credential store, stdout/stderr and exit-code contracts, TTY traps, and the proactive plays agents underuse |
-| `references/environment.md` | creating a project, choosing the engine coordinate or SDK extra, the base image inventory and Dockerfile layering, private registries, or the queue image-copy story — it points at `manifest.md` for schema detail |
+| `references/environment.md` | creating a project, choosing the simulation image or SDK engine option, the base image contents and Dockerfile layers, private registries, or how queue images are saved — it points at `manifest.md` for schema detail |
 | `references/auth.md` | signing in, a 401 or "not authenticated" error, checking who or which organization is active, switching organizations, or a wrong-account/wrong-API symptom — `ANTIOCH_ENV` and the per-environment credential layout live here |
 | `references/authoring.md` | writing or editing an `@antioch.scenario` decorator — parameters, cases, `sim=` boot profiles — or local discovery refuses a scenario; verdict and telemetry design belongs to the `scenario-design` skill |
 | `references/running.md` | dispatching anything, choosing `antioch run FILE` vs a scenario, selection flags, queueing and its flag constraints, streaming, output verbosity — and FIRST when a dispatched run misbehaves: pull its status and logs before theorizing |
@@ -343,7 +343,7 @@ appears, not after a failed guess:
 | `references/ros2.md` | anything ROS 2 — `rclpy` in a scenario, topics, an auxiliary autonomy container, or missing ROS tooling in the image |
 | `references/sessions.md` | interactivity is needed — iterate on live Isaac state cell by cell with a Jupyter kernel, stream a kernel, or point local JupyterLab at a remote kernel |
 | `references/assets.md` | ANY asset need — the task needs a robot, prop, or environment; the user names an object that might exist as an asset; a result should be published for the team — search the asset catalog before building geometry by hand |
-| `references/mission-control.md` | the hosted workspace seat — `ANTIOCH_WORKSPACE_ID` is set, a run's origin says `Mission Control`, auth verbs are refused, or the user works from the webapp console |
+| `references/mission-control.md` | the hosted authoring environment — `ANTIOCH_WORKSPACE_ID` is set, a run's origin says `Mission Control`, auth verbs are refused, or the user works from the webapp console |
 
 The one coding rule that crosses every Antioch project is import safety:
 scenario modules must import cleanly with no simulator installed because the

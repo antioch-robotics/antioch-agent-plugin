@@ -311,6 +311,6 @@ class MyLeggedRobot(PolicyMobilityGenRobot):
 - **The occupancy map is an input you must ship.** Origin and resolution in
   `map.yaml` must match the USD scene or goals spawn inside shelves. Generating
   the map is the navigation stack's job (`references/navigation.md`) — commit the
-  `map.yaml` + PNG pair into the project so the current project tree carries it.
+  `map.yaml` + PNG pair into the project so Antioch includes both files.
 - **One GPU, one process.** Multi-GPU replay segfaults on Kit 110.1.x; one
   scenario process per Antioch machine is already the safe shape.
