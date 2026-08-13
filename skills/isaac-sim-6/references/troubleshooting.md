@@ -39,7 +39,7 @@ evidence that survives it. For run logs and artifact downloads, load the
 | Black render artifact | no lights, or wrong render mode | DomeLight (>= 100) + DistantLight (>= 500); `RaytracedLighting` for iteration, PathTracing only for hero shots |
 | Flat, shadowless render | low pixel variance | accent lighting; check light cone bounds |
 | Replicator capture hangs | timeline not playing / no fresh frame | play timeline; step once before capture |
-| `rep.orchestrator.run()` never returns | async misuse | `await step_async()` inside an async context |
+| `rep.orchestrator.run()` returns with no dataset files | managed-run `run()` only submits an asynchronous start | Capture with `rep.orchestrator.step(...)`, drain `rep.backends.io_queue.wait_until_done()`, then check the writer count before archiving; use `await step_async()` only inside an async context |
 | Stage open takes minutes | > 1000 layers | consolidate into library layers |
 | Slow asset load / resolver stalls | missing external references | audit `layer.GetExternalReferences()` |
 | CUDA OOM | too many envs/bodies for VRAM | reduce num_envs; instanceable assets; skip appearance payloads |

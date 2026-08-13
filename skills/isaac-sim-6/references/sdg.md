@@ -14,6 +14,16 @@ Core Isaac facts — the 6.0 namespace map, boot/step/readback ordering, the
 lazy-import invariant in full — live in `SKILL.md`; dispatch, queued suites,
 and records in `antioch-platform`. Nothing here assumes a local simulator install.
 
+## Managed-run capture rule
+
+`rep.orchestrator.run()` only submits an asynchronous start command. In a
+managed Antioch scenario it can return before a writer has produced any files,
+so a run can appear to pass with an empty dataset. Capture each frame with
+`rep.orchestrator.step(...)`, then drain
+`rep.backends.io_queue.wait_until_done()` before reading the writer output.
+`rep.orchestrator.wait_until_complete()` is a standalone-workflow helper and is
+not the managed-run synchronization point.
+
 ## Choose the pipeline
 
 | Goal | Pipeline |
@@ -126,6 +136,7 @@ def warehouse_frames(run: antioch.ScenarioRun, seed: int = 1000, num_frames: int
     import isaacsim.core.experimental.utils.stage as stage_utils
     from isaacsim.core.experimental.utils.semantics import add_labels
     from isaacsim.storage.native import get_assets_root_path
+    from pxr import Gf, UsdGeom, UsdLux
 
     rng = np.random.default_rng(seed)
     rep.set_global_seed(seed)
@@ -133,6 +144,11 @@ def warehouse_frames(run: antioch.ScenarioRun, seed: int = 1000, num_frames: int
     assets_root = get_assets_root_path()
     stage_utils.open_stage(assets_root + "/Isaac/Environments/Simple_Warehouse/full_warehouse.usd")
     stage = stage_utils.get_current_stage()
+    dome = UsdLux.DomeLight.Define(stage, "/World/SDG/DomeLight")
+    dome.GetIntensityAttr().Set(400.0)
+    sun = UsdLux.DistantLight.Define(stage, "/World/SDG/Sun")
+    sun.GetIntensityAttr().Set(1500.0)
+    UsdGeom.Xformable(sun.GetPrim()).AddRotateXYZOp().Set(Gf.Vec3f(-50, 20, 0))
 
     props = []  # spawn + label everything annotators should see
     for i in range(6):
@@ -149,25 +165,33 @@ def warehouse_frames(run: antioch.ScenarioRun, seed: int = 1000, num_frames: int
     writer = rep.WriterRegistry.get("BasicWriter")
     writer.initialize(output_dir=str(output_dir), rgb=True, bounding_box_2d_tight=True, semantic_segmentation=True, distance_to_image_plane=True)
     writer.attach(render_product)
+    rgb = rep.AnnotatorRegistry.get_annotator("rgb")
+    rgb.attach(render_product)
+    logger = antioch.Logger("sdg")
 
     for frame in range(num_frames):
         rep.functional.modify.pose(  # randomize the camera every frame
-            camera,
-            position_value=rng.uniform((-15, -5, 1.5), (5, 10, 4.0)).tolist(),
-            look_at_value=props[rng.integers(0, len(props))],
-            look_at_up_axis=(0, 0, 1),
+            camera, position_value=rng.uniform((-3, -3, 1.5), (3, 3, 3.0)).tolist(), look_at_value=props[rng.integers(0, len(props))], look_at_up_axis=(0, 0, 1)
         )
         if frame % 5 == 0:  # re-scatter objects every few frames
             for prim in props:
                 rep.functional.modify.pose(prim, position_value=(rng.uniform(-15, 5), rng.uniform(-5, 10), 0))
         rep.orchestrator.step(delta_time=0.0, rt_subframes=8)  # delta_time=0.0 freezes the timeline
+        rep.backends.io_queue.wait_until_done()
+        if frame % 8 == 0:
+            # A close, explicit data camera is reviewable even when the default
+            # viewport camera is distant or black.
+            logger.image("camera", np.asarray(rgb.get_data()))
 
-    rep.orchestrator.wait_until_complete()  # flush the backend before archiving
+    rep.backends.io_queue.wait_until_done()  # flush the backend before archiving
     writer.detach()
     render_product.destroy()
 
     rgb_count = len(list(output_dir.glob("**/rgb/*.png")) + list(output_dir.glob("**/rgb_*.png")))
-    assert rgb_count >= num_frames, f"writer produced {rgb_count} RGB frames, expected {num_frames}"
+    complete = rgb_count >= num_frames
+    run.check("writer produced all RGB frames", complete, detail=f"{rgb_count}/{num_frames} RGB frames")
+    if not complete:
+        run.fail(f"Replicator writer produced {rgb_count} RGB frames, expected {num_frames}")
     publish_dataset(run, output_dir, f"warehouse_frames_seed{seed}")  # helper from "The Antioch output contract"
     run.add_result("sdg", {"seed": seed, "frames": rgb_count})
 ```
@@ -176,7 +200,8 @@ Key rules for this loop:
 
 - `rep.orchestrator.set_capture_on_play(False)` — you step captures manually;
   `delta_time=0.0` freezes the timeline between captures (static-scene SDG);
-  `wait_until_complete()` before archiving, or the tar misses trailing frames.
+  `rep.backends.io_queue.wait_until_done()` after each step keeps the writer
+  and the archive in lockstep.
 - Reproducibility = one scenario `seed` param feeding both
   `np.random.default_rng(seed)` and `rep.set_global_seed(seed)`, swept by cases — same seed + same engine version ⇒ same dataset.
 - Throughput: `rt_subframes` 4–8 for RTX real-time (16–32 path tracing);
@@ -216,9 +241,9 @@ archive with no results attached is not evidence.
 | Symptom | Cause | Fix |
 |---|---|---|
 | Empty segmentation / no boxes | prims never labeled | `add_labels(prim, labels=[...], taxonomy="class")` or `rep.functional.modify.semantics(prim, {"class": label}, mode="add")` |
-| Black or stale frames | capture read before render finished | `wait_until_complete()` before reads; `rt_subframes >= 4`; discard startup captures. `rt_subframes` is per-frame temporal sampling, not the `update_app()` RTX denoiser warm-up described in `references/rendering.md` |
+| Black or stale frames | capture read before render finished | `rep.backends.io_queue.wait_until_done()` after each `step()`; `rt_subframes >= 4`; discard startup captures. `rt_subframes` is per-frame temporal sampling, not the `update_app()` RTX denoiser warm-up described in `references/rendering.md` |
 | `ModuleNotFoundError: omni.isaac.*` | ported 4.5/5.x code | removed in 6.0 — follow the `isaac-sim-6` namespace map |
-| Archive missing trailing frames | archived before backend flush | `wait_until_complete()`, detach, then tar |
+| Archive missing trailing frames | archived before backend flush | `rep.backends.io_queue.wait_until_done()`, detach, then tar |
 | `CosmosWriter` produces nothing | script-node opt-in unset | set `/app/omni.graph.scriptnode/opt_in = True` |
 
 ## MobilityGen — record → replay+render

@@ -144,6 +144,56 @@ durable results in scenario artifacts or the asset store. Add `--json` for one
 transfer manifest with the direction, path, byte count, checksum, and
 replacement fact; symlinks are copied as links, never followed.
 
+## Move a multi-GB dataset
+
+Scenario artifacts and asset payloads accept up to 16 GiB per object, but the
+tested dogfood paths were 64 MiB for an artifact and 128 MiB for `services cp`
+and an asset. Treat those as confidence points, not a promise that one 10 GB
+upload is a good retry unit. Antioch does not expose provider multipart uploads
+or byte-range resume. A transfer is one object, so bound the failure domain by
+sharding the dataset into archives such as `shard-0000.tar.zst` through
+`shard-0015.tar.zst`.
+
+Write one manifest beside the shards. Include the shard name, byte count, and
+SHA-256 digest, for example:
+
+```json
+{
+  "dataset": "warehouse-2026-08",
+  "shards": [
+    {"name": "shard-0000.tar.zst", "size_bytes": 734003200, "sha256": "..."}
+  ]
+}
+```
+
+For machine scratch, copy one shard at a time and keep the JSON transfer
+manifest:
+
+```bash
+antioch services cp sim:/workspace/output/shard-0000.tar.zst ./shards/ --json
+sha256sum ./shards/shard-0000.tar.zst
+```
+
+For durable scenario output, add each archive with a distinct artifact name and
+download only the missing shard when a consumer retries:
+
+```bash
+antioch scenario download SCENARIO_RUN_ID --artifact shard-0000.tar.zst --output ./shards/shard-0000.tar.zst --json
+```
+
+For reusable organization data, publish each shard as its own immutable asset
+version. A retry with the same name, version, and digest is idempotent; a
+different digest is refused. Verify every pull against its recorded digest:
+
+```bash
+antioch assets pull datasets/warehouse-2026/shard-0000 --version v1 --output ./shards/shard-0000.tar.zst --json
+antioch assets verify datasets/warehouse-2026/shard-0000 --version v1
+```
+
+If a shard fails, retry only that shard and update the manifest after its local
+SHA-256 matches. Keep the manifest itself as a small scenario artifact or
+versioned asset so the list of completed shards is durable.
+
 ## Keep a built image
 
 A built service image lives on the machine and dies with it — released

@@ -130,7 +130,7 @@ def mobility_dataset(run: antioch.ScenarioRun, seed: int = 2000, episodes: int =
             writer.write_state_dict_segmentation(loaded.state_dict_segmentation(), step)
             writer.write_state_dict_depth(loaded.state_dict_depth(), step)
             frames_rendered += 1
-        rep.orchestrator.wait_until_complete()
+        rep.backends.io_queue.wait_until_done()
         timeline.stop()  # leaving the timeline playing across teardown crashes Kit
         loaded.disable_rendering()
         writer.close()
