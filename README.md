@@ -30,10 +30,9 @@ Python, while Antioch runs the simulator on a remote GPU machine.
 
 The plugin uses the Antioch CLI to run simulations and the
 `antioch-research-mcp` executable to research the simulation stack. The easiest
-way to install both is with [`uv`](https://docs.astral.sh/uv/):
+way to install both is with [`uv`](https://docs.astral.sh/uv/getting-started/installation/). After installing `uv`, run:
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
 uv tool install antioch-sim
 uv tool update-shell
 ```
@@ -89,11 +88,19 @@ Restart the agent after installation.
 
 ## Put the agent to work
 
-Start Codex or Claude Code from an Antioch project with its environment active:
+Start Codex or Claude Code from an Antioch project with its environment active. On macOS or Linux:
 
 ```bash
 cd /path/to/my-sim
 source .venv/bin/activate
+codex
+```
+
+On Windows PowerShell:
+
+```powershell
+cd C:\path\to\my-sim
+.venv\Scripts\Activate.ps1
 codex
 ```
 
@@ -190,8 +197,9 @@ Run `antioch auth logout` if you also want to remove the local Antioch login.
 
 ## Troubleshooting
 
-- **`antioch-research-mcp` is not found:** run `uv tool update-shell`, start a
-  new shell, and confirm that `command -v antioch-research-mcp` prints a path.
+- **`antioch-research-mcp` is not found:** run `uv tool list` and confirm that
+  `antioch-sim` appears. Then run `uv tool update-shell`, start a new shell, and
+  check `claude mcp list` or `codex mcp list --json` again.
 - **Antioch Research reports that authentication is required:** run
   `antioch auth login`, then retry the request.
 - **The plugin is installed but its guidance is absent:** restart the agent and
