@@ -1,0 +1,17 @@
+{
+  "name": "antioch",
+  "version": "0.2.0",
+  "description": "Turns local coding agents into expert simulation engineers with Antioch, Isaac Sim 6, Isaac Lab 3, scenario design, and grounded simulation research",
+  "author": {
+    "name": "Antioch"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "simulation",
+    "isaac-sim",
+    "isaac-lab",
+    "robotics",
+    "antioch"
+  ],
+  "mcpServers": "./.mcp.json"
+}

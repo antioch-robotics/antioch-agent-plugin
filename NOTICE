@@ -1,0 +1,24 @@
+Antioch Agent Plugin
+Copyright 2026 Antioch
+
+This plugin includes content adapted from the Isaac Sim skills library
+(https://github.com/isaac-sim/IsaacSim/tree/main/skills), which is
+Copyright NVIDIA Corporation and licensed under the Apache License,
+Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0).
+
+The adapted material lives in skills/isaac-sim-6/ (SKILL.md and its
+references), drawn from these upstream skills:
+
+  physics-simulation, usd-composition-architecture, isaac-sim-troubleshooting,
+  isaac-sim-validator, isaac-sim-sensor, isaac-camera,
+  urdf-mjcf-to-usd-conversion, usd-articulation, usd-pipeline,
+  spatial-reasoning, navigation-primitives, occupancy-map,
+  isaac-sim-robot-navigation, manipulation-ik, isaac-sim-rendering,
+  isaac-sim-headless-deployment (batch pattern only), data-collection-sim,
+  mobility-gen
+
+All adapted content has been modified from the originals: material assuming
+a local Isaac Sim installation was removed or rewritten for Antioch's remote
+execution model, guidance was pinned to Isaac Sim 6.0.1, and Antioch's
+lazy-import invariant was added. Customer-project-specific residue in the
+upstream skills was generalized or dropped.

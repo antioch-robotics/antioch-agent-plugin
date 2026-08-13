@@ -1,0 +1,36 @@
+{
+  "name": "antioch",
+  "version": "0.2.0",
+  "description": "Turns local coding agents into expert simulation engineers with Antioch, Isaac Sim 6, Isaac Lab 3, scenario design, and grounded simulation research",
+  "author": {
+    "name": "Antioch"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "simulation",
+    "isaac-sim",
+    "isaac-lab",
+    "robotics",
+    "antioch"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Antioch",
+    "shortDescription": "Expert simulation engineering with Antioch",
+    "longDescription": "Design and run simulation workloads, build scenarios and suites, analyze their evidence, and research versioned simulation documentation and source.",
+    "developerName": "Antioch",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Simulation engineering",
+      "Scenario evaluation",
+      "Grounded engine research"
+    ],
+    "defaultPrompt": [
+      "Design and run an Antioch scenario for this robotics task.",
+      "Research this simulation API, then fix the implementation.",
+      "Compare these suite runs and explain what changed."
+    ],
+    "brandColor": "#FF634F"
+  }
+}
