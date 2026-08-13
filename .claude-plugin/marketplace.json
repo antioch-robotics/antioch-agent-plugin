@@ -1,15 +1,15 @@
 {
   "name": "antioch",
-  "description": "The official Antioch plugin for simulation engineering with local coding agents.",
+  "description": "The official agent plugin for the Antioch simulation platform.",
   "owner": {
     "name": "Antioch"
   },
   "plugins": [
     {
       "name": "antioch",
-      "description": "Turns local coding agents into expert simulation engineers with Antioch, Isaac Sim 6.0.1, Isaac Lab 3.0, and grounded simulation research.",
+      "description": "Build scenarios, run evaluations, inspect evidence, and research the simulation stack with Antioch.",
       "source": "./",
-      "version": "0.2.0"
+      "version": "0.2.1"
     }
   ]
 }

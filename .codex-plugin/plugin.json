@@ -1,7 +1,7 @@
 {
   "name": "antioch",
-  "version": "0.2.0",
-  "description": "Turns local coding agents into expert simulation engineers with Antioch, Isaac Sim 6, Isaac Lab 3, scenario design, and grounded simulation research",
+  "version": "0.2.1",
+  "description": "Adds Antioch simulation engineering to Codex and Claude Code: build scenarios, run evaluations, inspect evidence, and research the simulation stack",
   "author": {
     "name": "Antioch"
   },
@@ -17,19 +17,19 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Antioch",
-    "shortDescription": "Expert simulation engineering with Antioch",
-    "longDescription": "Design and run simulation workloads, build scenarios and suites, analyze their evidence, and research versioned simulation documentation and source.",
+    "shortDescription": "Build and evaluate simulations with Antioch",
+    "longDescription": "Work from an existing robotics repository to build Antioch simulations, evaluate scenarios and suites, inspect recorded evidence, and research versioned simulation documentation and source.",
     "developerName": "Antioch",
     "category": "Developer Tools",
     "capabilities": [
-      "Simulation engineering",
-      "Scenario evaluation",
-      "Grounded engine research"
+      "Antioch simulation engineering",
+      "Scenario and suite evaluation",
+      "Versioned simulation research"
     ],
     "defaultPrompt": [
-      "Design and run an Antioch scenario for this robotics task.",
-      "Research this simulation API, then fix the implementation.",
-      "Compare these suite runs and explain what changed."
+      "Inspect this robotics stack and design an Antioch scenario to evaluate it.",
+      "Research the exact simulation APIs this change needs, implement it, and validate it on Antioch.",
+      "Run this suite across Antioch machines and explain the failures from the recorded evidence."
     ],
     "brandColor": "#FF634F"
   }
