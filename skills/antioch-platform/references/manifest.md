@@ -292,7 +292,7 @@ scenario_paths: ["src"]
 
 services:
   sim:
-    image: "antioch-sim/isaac-601-ga:0.3.33"
+    image: "antioch-sim/isaac-601-ga:0.3.34"
     watch:
       - action: sync
         path: .
@@ -314,7 +314,7 @@ name: Pick and Place
 services:
   sim:
     build: .    # context ".", dockerfile "Dockerfile";
-                # FROM antioch-sim/isaac-601-ga:0.3.33 is the engine truth
+                # FROM antioch-sim/isaac-601-ga:0.3.34 is the engine truth
     environment:
       ROS_DOMAIN_ID: "7"
     depends_on:
