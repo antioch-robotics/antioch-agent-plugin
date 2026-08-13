@@ -23,6 +23,13 @@ Use `antioch scenario list --help` for the complete filter set. Common filters
 include scenario, project, suite, user, tag, parameter, result, time range,
 dispatch type, phase, and outcome.
 
+- `-q/--search` matches a scenario-name substring; `--scenario` is the exact
+  authored name.
+- Provenance filters: `--suite-run-id ID` (one invocation's members),
+  `--invocation-id ID` (everything one queued submission created — queued
+  `--json` output carries the id), `--dispatched-from HOST` (a hostname, or
+  `'Mission Control'` for workspace dispatches), and `--no-suite`
+  (standalone runs only).
 - `--param` / `--result` filter on scenario params and reported metrics. The grammar is `key:op:value`, repeatable — every predicate must match:
   - `=` typed equality for scalars (`--param 'seed:=:42'`), containment on array/object values
   - `~` case-insensitive substring: `--param 'label:~:warehouse'`
@@ -34,10 +41,19 @@ dispatch type, phase, and outcome.
   selects queue workers.
 - `--phase` and `--outcome` are repeatable. `completed` includes every terminal
   outcome; use `--outcome` to narrow it.
-- Everyday examples: `--mine --since 7d` (my recent runs), `--suite nightly --outcome failed` (last night's failures), `--suite-run-id ID` (one invocation's members), `--dispatch interactive` (foreground runs only).
+- Everyday examples: `--mine --since 7d` (my recent runs), `--suite nightly --outcome failed` (last night's failures), `--dispatch interactive` (foreground runs only).
 - `--json` list pages are `{ "items": [...], "next_cursor": "..." }`; pass
   `next_cursor` back as `--cursor` and keep fetching while it is non-null. A
   cursor pins its page's whole query — repeat no filters beside it.
+
+## Discovering filter values
+
+- `antioch scenario suggest tag --json` returns distinct stored values and
+  counts for one filterable field. The fields are `user_email`, `tag`,
+  `suite`, `scenario`, `project`, and `dispatched_from`; a narrowing prefix
+  is an optional second positional, as in
+  `antioch scenario suggest scenario bin --json`. Reach for suggest before
+  guessing any filter value.
 
 ## Inspecting one run
 
@@ -53,7 +69,9 @@ dispatch type, phase, and outcome.
   current directory, so one download cannot collide with another run. `-o
   PATH` selects an explicit destination. The download **includes the `.rrd`
   Rerun telemetry** when the run kept one. `--json` emits one transfer
-  manifest; without it stdout is the destination paths. `--artifact NAME` picks artifacts (repeatable; omit for
+  manifest with `scenario_run_id`, `destination`, `files`, and `count`; without
+  it stdout prints one destination path per file. `--artifact NAME` picks
+  artifacts (repeatable; omit for
   all) — NAME is the **logical artifact key** from the run's artifact
   index (`telemetry`, not `telemetry.rrd`); the JSON's artifact index maps
   each key to its stored filename, and a wrong key's error lists the valid
@@ -61,16 +79,19 @@ dispatch type, phase, and outcome.
 - Files left only on a machine are temporary. If it is not a result, artifact,
   log, or telemetry, do not treat it as durable.
 
-## Discovering filter values
+## Cancellation
 
-- `antioch scenario suggest tag --json` returns distinct stored values and
-  counts for one filterable field. The fields are `user_email`, `tag`, `suite`,
-  `scenario`, and `project`; add a prefix when needed.
+- `antioch scenario cancel SCENARIO_RUN_ID --json` cancels one standalone
+  queued or running scenario run; the JSON result carries `changed`, and an
+  already-terminal run is reported as a note rather than an error. A suite
+  member cannot be cancelled alone — cancel its parent with
+  `antioch suite cancel SUITE_RUN_ID --json` (`suites.md`).
 
 ## Deletion
 
 - `antioch scenario delete --run RUN_ID` deletes standalone completed runs;
-  repeat `--run` for more than one. Suite parents have their own home:
+  repeat `--run` for more than one. Machine usage already measured stays
+  billable. Suite parents have their own home:
   `antioch suite delete --run SUITE_RUN_ID` deletes one suite run and its
   members, while `antioch suite delete --suite NAME` deletes every owned run
   of that authored suite. A suite member cannot be deleted apart from its

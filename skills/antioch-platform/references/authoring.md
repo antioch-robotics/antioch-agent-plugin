@@ -1,6 +1,6 @@
 # Authoring scenarios
 
-A scenario is a Python function decorated with `@antioch.scenario` — a 3D integration test Antioch can parameterize, repeat, and evaluate. Decoration never executes the body; the CLI discovers scenarios by reading the files locally.
+A scenario is a Python function decorated with `@antioch.scenario` — a 3D integration test Antioch can parameterize, repeat, and evaluate. Decoration never executes the body; the CLI discovers scenarios by reading the files locally. This reference covers the dispatch-facing surface: the decorator, discovery, and the boot/session boundary. Designing the scenario itself — modelling pass/fail with `run.check`, recording results and artifacts, telemetry, and viewer layouts — is the `scenario-design` skill; load it whenever the question is what a run should measure or report rather than how it is declared and dispatched.
 
 ## The decorator
 
@@ -28,41 +28,13 @@ def aisle_run(run: antioch.ScenarioRun, seed: int = 0, speed: float = antioch.pa
 
 ## Discovery rules
 
-- `antioch.yaml`'s optional `scenario_paths` lists files and directories; when omitted, discovery scans Python files in the `services.sim` build context. Hidden directories, virtualenvs (directories with `pyvenv.cfg`), `node_modules`, common cache/build directories, and paths matched by `.gitignore` or `.dockerignore` are skipped. Directories are searched recursively; use `scenario_paths` for a narrower or different scope.
+- `antioch.yaml`'s optional `scenario_paths` lists files and directories. When omitted, discovery scans Python files in the `services.sim` build context; when `services.sim` uses an image directly, or the stack has no sim service, discovery starts at the project root (the default `antioch init` project is image-based, so it scans the whole project). Hidden directories, virtualenvs (directories with `pyvenv.cfg`), `node_modules`, common cache/build directories, and paths matched by `.gitignore` or `.dockerignore` are skipped. Directories are searched recursively; use `scenario_paths` for a narrower or different scope.
 - **Module scope must import with no simulator installed**: `pxr`, `omni`, `carb`, `isaacsim`, `isaaclab*`, and anything depending on them belong inside the scenario function (the engine skills own this invariant). Top level may use `antioch`, NumPy, stdlib — and must not write files, touch the network, or do sim work. When an Isaac import runs too early, the CLI names the offending module.
 - Check what discovery sees with `antioch scenario collect --json`.
 
-## Outcomes, checks, and results
+## Verdicts, results, and telemetry — one pointer
 
-Declare the task's criteria with `run.check(criterion, passed, detail=...)` — one call per criterion the task defines, with the measurement in `detail`:
-
-```python
-tilt_deg, speed_mps = measure(scene)
-run.check("upright", tilt_deg <= 5.0, detail=f"tilt {tilt_deg:.2f}° <= 5.00°")
-run.check("at rest", speed_mps <= 0.01, detail=f"{speed_mps:.4f} m/s")
-```
-
-Checks never stop the body, so every criterion still gets measured after an early one fails; re-checking a criterion replaces its verdict in place. Checks land in `results` under the reserved `checks` key, and `antioch scenario show` displays them in a dedicated checks row. A scenario with no checks reports only "the code did not crash" — the anti-pattern to avoid.
-
-- Pass: the function returns normally (return value ignored) and no check failed.
-- Fail: any check failed, an assertion fires, or `run.fail("reason")`. The last two stop the body immediately — keep them for "cannot continue" and put measured criteria in `run.check`.
-- Skip: `run.skip("reason")` for an unmet precondition, not a failure.
-- Error: any other uncaught exception — a defect in the run, not a verdict on the task.
-- `run.set_outcome(...)` overrides the derived verdict for a judgement subtler than a conjunction of checks.
-- `run.add_result(name, value)` / `run.add_results({...})` — named metrics (str/number/bool/list/dict/None; reusing a name replaces). These are filterable later via `scenario list --result`. **Save important measurements before the final assertion.**
-- `run.add_artifact(path, name=..., content_type=...)` — uploads immediately, so it survives a later failure. Combine many small files into one archive.
-- Read-only context on the handle: `name`, `scenario_run_id`, `case_id`, `tags`, `params`, `results`, `wall_s`, `sim_s`, `live_uri`.
-
-## Telemetry
-
-```python
-logger = antioch.Logger("cube")  # channel prefix: cube/height
-logger.scalar("height", z)
-logger.value("points", rr.Points3D(...))  # Rerun objects, or dicts of numbers
-logger.info("grasp settled")
-```
-
-Scalars and values become the run's Rerun `.rrd` telemetry (downloaded by `scenario download`); log lines go to both terminal and Rerun. `scalar()`/`value()` are no-ops without an active run; `info()`/`warning()`/`error()` always print to the terminal and also reach Rerun when a run is active, so library code can log unconditionally.
+The body declares the task's criteria with `run.check(criterion, passed, detail=...)`, saves named metrics with `run.add_result(...)`, uploads files with `run.add_artifact(...)`, and streams telemetry through a module-scope `antioch.Logger`. A scenario with no checks reports only "the code did not crash" — the anti-pattern to avoid. The `scenario-design` skill owns all of it: check semantics, outcome derivation (`run.fail`, `run.skip`, `run.set_outcome`), result and artifact rules, `Logger` usage, the automatic viewport capture, and blueprints. Load it before writing or reviewing a scenario body.
 
 ## Native scripts and notebooks
 

@@ -1,4 +1,11 @@
-# Projects and environments: `antioch.yaml`
+# Projects and environments
+
+This file owns the project workflow: creating a project, the engine
+coordinate and SDK extras, the base image inventory, Dockerfile layering,
+private registries, and the queue image-copy story. The complete
+`antioch.yaml` schema — every key, constraint, watch rule, and example
+manifest — is `manifest.md`; go there for any manifest authoring or
+validation question.
 
 ## Start in a project
 
@@ -10,14 +17,32 @@ uv run antioch --version
 uv run antioch init warehouse-amr
 ```
 
-`init` is local. It reads the declared engine extra and installed SDK version, then
+`init` is local and non-interactive. It reads the declared engine extra and
+installed SDK version, then
 creates a manifest with the matching image coordinate, a simulation script,
-example scenarios, `.gitignore`, and `.dockerignore`. It does not allocate a
-machine or replace existing source files. Use `antioch init --help` for the
-JSON result and directory behavior. The generated ignore file covers local
+example scenarios, `smoke` and `sweep` suites, `.gitignore`, and
+`.dockerignore`. It does not allocate a
+machine, register anything remotely, or replace existing source files, and it
+refuses a directory that is already inside a project. Pass
+`--engine isaac-601-ga` or `--engine isaac-lab-30b2` to override the engine
+the installed extra selects. The generated ignore file covers local
 `home/`, `.cache/`, and `outputs/` trees so they do not enter a build context.
-The coordinate pins the cloud engine and SDK version; edit it to upgrade an
-existing project.
+
+Inspect project identity afterwards — useful when several checkouts exist or
+a command acts on the wrong project:
+
+```bash
+uv run antioch project current --json
+uv run antioch project list --json
+```
+
+`project current` prints the project the working directory selects (literal
+`null` in JSON outside any project); `project show` names one by name or id.
+
+A project needs at least one service; `services.sim` is the reserved,
+optional simulation service. A service-only stack (viewer, API, ROS tooling)
+is valid — Isaac commands refuse it until a `sim` service is declared. See
+`manifest.md` for the full contract.
 
 ## Base image inventory
 
@@ -27,7 +52,8 @@ runtime, Python 3 with pip, venv, and development headers, `uv`, `git`, and
 `git-lfs`. It also includes the runtime graphics and audio libraries that Kit
 needs: Vulkan and `vulkan-tools`, GL/EGL/GLES/GLVND, X11, and audio support.
 The Isaac Sim layer carries the in-process ROS 2 Jazzy Python stack. The
-`isaac-lab-30b2` layer adds Isaac Lab 3.0.0b2 and its pinned framework extras.
+`isaac-lab-30b2` layer adds Isaac Lab 3.0.0b2.post1 and its pinned framework
+extras.
 
 This is a runtime inventory, not a promise of a general build workstation.
 The base does not include `gcc`/`g++` or `build-essential`, the FFmpeg command
@@ -44,11 +70,14 @@ slow, stable system dependencies before source copies. Watch sync updates
 source without rebuilding, while a queued or saved run freezes the final
 image by digest.
 
+## Engine coordinate and SDK version
+
 The sim image coordinate is `antioch-sim/<engine>:<sim-version>`, stamped by
-`antioch init`; the platform verifies the engine and SDK version from the image's
-labels. Add a Dockerfile only for custom dependencies and use the same
-coordinate in its `FROM` line. Install the public SDK from PyPI with the extra
-that should select the initial engine image and examples:
+`antioch init`; the platform verifies the engine and SDK version from the
+image's labels. The coordinate pins the cloud engine and SDK version; edit it
+to upgrade an existing project. Add a Dockerfile only for custom dependencies
+and use the same coordinate in its `FROM` line. Install the public SDK from
+PyPI with the extra that should select the initial engine image and examples:
 
 ```bash
 uv add --compile-bytecode "antioch-sim[isaac-601-ga]"
@@ -57,97 +86,53 @@ uv add --compile-bytecode "antioch-sim[isaac-601-ga]"
 The SDK wheel includes editor types for every supported engine. The extra does
 not install Isaac locally or limit which types are available.
 
-Do not add an engine selector to `antioch.yaml`; it has none.
+When the locally installed SDK version differs from the image coordinate's,
+the CLI warns and the **image remains authoritative** — the code runs against
+the image's SDK. Align the local pin with the coordinate to silence the
+warning and keep editor types exact.
 
-## Keep the manifest small and complete
+Do not add an engine selector to `antioch.yaml`; it has none. The built sim
+image's labels are the engine source of truth.
 
-The manifest identifies the project, discovery paths, suites, and complete
-service graph. The optional `schema_version` field defaults to the latest
-schema. The required `services.sim` entry and auxiliary services share one
-mapping:
+## Development flow versus an immutable run
 
-```yaml
-name: warehouse-amr
-scenario_paths: [scenarios]
-
-services:
-  sim:
-    image: antioch-sim/isaac-601-ga:0.3.31
-    environment:
-      ROS_DOMAIN_ID: "7"
-    depends_on:
-      ros: {condition: service_healthy}
-    ports: ["8765:8765"]
-  ros:
-    image: ros:jazzy
-    healthcheck:
-      # Healthchecks skip the image entrypoint, so source the ROS
-      # environment explicitly.
-      test: ["CMD", "bash", "-c", "source /opt/ros/jazzy/setup.bash && ros2 topic list"]
-      interval: 2s
-      timeout: 5s
-      retries: 15
-```
-
-Use the [Compose file reference](https://docs.docker.com/reference/compose-file/)
-for the kept field vocabulary; Docker runs underneath Antioch. `services.sim`
-is always active and receives platform-managed privileges, GPU access, init, and
-the `/workspace/output` bind. Host network and IPC are defaults. An explicit
-supported `network_mode` or `ipc` value can opt a service out when it needs
-isolation. Auxiliary `profiles` select optional services; they are not allowed
-on `sim`. Streaming is a CLI/runtime choice, not a manifest `stream` key.
-
-Do not author `volumes`, `networks`, `restart`, `deploy`,
-`scale`, `replicas`, `container_name`, `extends`, `include`, `secrets`,
-`configs`, or `develop`. `watch` belongs directly under the service, not under
-another development document. Environment names beginning with `ANTIOCH_` and
-labels under `antioch.*` or `com.docker.*` are reserved.
-
-## Watch versus an immutable run
-
-Put development rules on the service:
-
-```yaml
-services:
-  sim:
-    build: .
-    watch:
-      - action: sync
-        path: .
-        target: /workspace/project
-```
-
-Start that loop with:
+Put watch rules on the service (`manifest.md` owns the rule schema and the
+sync/exec/restart/rebuild decision table) and start the loop with:
 
 ```bash
 antioch services up --watch
 ```
 
 The watcher arms before its initial reconciliation, batches file events,
-propagates deletes, and reports failures instead of reconnecting silently. A
-`sync+exec` or `sync+restart` rule affects only its service. `ports` open authenticated local tunnels
-while the stack is up. Ctrl-C ends the watcher but leaves containers and declared ports
+propagates deletes, and reports failures instead of reconnecting silently.
+`ports` open authenticated local tunnels
+while the stack is up. Ctrl-C ends the watcher but leaves containers and
+declared ports
 running; use `antioch services down` to stop them. A bare `antioch services up`
 also opens declared ports and returns.
 
 When no watcher is running, `antioch run`, `scenario run`, and
-`suite run` perform one full current-tree reconciliation (including ignore and
+`suite run` perform one full current-tree reconciliation (including
+`.gitignore` and
 `.dockerignore` rules) before dispatch. This is the run-freshness guarantee.
 
 ## Use private-registry images
 
-An image service can use an image in your own registry:
+An auxiliary service can use an image in your own registry. The `sim`
+service cannot: its `image` must stay an `antioch-sim/<engine>:<semver>`
+coordinate (or a Dockerfile build FROM one) — see `manifest.md`.
 
 ```yaml
 services:
-  sim:
-    image: ghcr.io/acme/warehouse-sim:2026.08
+  viz:
+    image: ghcr.io/acme/warehouse-viz:2026.08
 ```
 
 For an interactive pull, Antioch reads the same local Docker credential sources
 as Docker (`auths`, `credsStore`, and `credHelpers`) and sends the credential
 only with that Engine pull. For queued work, the submitter performs the
-credentialed pull and pushes a digest-pinned copy into your organization's private registry
+credentialed pull and pushes a digest-pinned copy into your organization's
+private registry
 before the run is submitted:
 
 ```bash
@@ -171,5 +156,8 @@ explains when an older run or a failed source capture or publish leaves the
 environment unavailable.
 
 Write temporary frames, checkpoints, and debug files to `/workspace/output`.
-Use `antioch services cp sim:/workspace/output/FILE ./FILE` for an explicit transfer and scenario artifacts or assets for
-anything that must survive machine release.
+Use `antioch services cp sim:/workspace/output/FILE ./FILE` for an explicit
+transfer and scenario artifacts or assets for
+anything that must survive machine release. To keep a built service image
+itself, export it to the local Docker daemon while the assignment is live:
+`antioch services images pull sim` (`machines.md` covers the workflow).

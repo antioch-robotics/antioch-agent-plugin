@@ -189,8 +189,11 @@ def report(run: antioch.ScenarioRun, points, rgb) -> None:
   scenario so an empty or stale sensor cannot look successful.
 - Poll with a deadline, not a fixed count, when warming up a render product or
   GMO stream; assert when the deadline expires so a dead sensor fails loudly.
-- `antioch.Logger().scalar(...)` / `.value(...)` stream time series and point
-  clouds into the run's `.rrd` telemetry — the remote stand-in for a GUI.
+- A module-scope `antioch.Logger("sensors")` streams time series and point
+  clouds into the run's `.rrd` telemetry through `.scalar(...)` / `.value(...)`
+  — the remote stand-in for a GUI. Never construct `antioch.Logger()` per
+  sample inside a step loop: it is a constructor in a hot loop, and its empty
+  prefix silently writes to a different channel.
 
 ## `aux_output_level` by modality
 

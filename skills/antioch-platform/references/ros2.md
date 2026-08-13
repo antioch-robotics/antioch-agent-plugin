@@ -8,8 +8,8 @@ needs them.
 
 ## Declare the graph
 
-Autonomy containers are ordinary entries under `services`; the required
-`services.sim` entry is the only simulator service:
+Autonomy containers are ordinary entries under `services`; `sim` is the
+reserved simulation service, and no other service may use an engine image:
 
 ```yaml
 services:
@@ -39,9 +39,10 @@ with an explicit `source`, as above — a bare `ros2` probe fails with
 
 Host networking and IPC default on every service, so DDS discovery works
 through localhost without a discovery server or a peer list. A service can
-opt out with an explicit supported `network_mode` or `ipc` value when it needs
-isolation. A service needed only by selected runs can carry an auxiliary
-`profiles` value. Use `antioch services up --watch` for the live graph; it is
+opt out with an explicit supported value — `network_mode: none` or `bridge`,
+`ipc: private`, or a `service:NAME` namespace reference for deliberate
+sharing; `manifest.md` owns the complete value sets. A service needed only by
+selected runs can carry an auxiliary `profiles` value. Use `antioch services up --watch` for the live graph; it is
 foreground, and Ctrl-C leaves containers running until `antioch services
 down`. Queued runs use a digest-pinned environment without development watch
 rules.

@@ -9,10 +9,13 @@ idle kernel is eventually culled.
 ## The kernel loop
 
 - `antioch jupyter start --json` starts one Isaac kernel on the assigned
-  machine and prints its identity. `--machine MACHINE` pins it.
+  machine and prints its identity (human mode prints the bare kernel id on
+  stdout for scripts). `--machine MACHINE` pins it.
 - `antioch jupyter cell 'print("ready")'` runs one cell and exits while the
   kernel stays alive. Use `--kernel KERNEL_ID` to choose among several live
-  kernels; source can also come from stdin.
+  kernels; source can also come from stdin. `--timeout` bounds the cell
+  (default 900 seconds) — raise it before a long training or SDG cell rather
+  than losing the result.
 - `antioch jupyter kernels --json` lists live kernels with state and last
   activity.
 - `antioch jupyter show KERNEL_ID` shows one kernel's state, stream ownership,
@@ -38,14 +41,19 @@ antioch jupyter unstream --kernel "$KERNEL_ID" --json
 The machine has one lease. A streaming kernel and a streaming `antioch run`
 cannot fight over the same listener; repeating the same kernel claim is
 idempotent, while a different holder is refused. Release it with
-`antioch jupyter unstream --kernel KERNEL_ID`.
+`antioch jupyter unstream --kernel KERNEL_ID`. Inside Mission Control,
+`jupyter stream` is how a kernel's Isaac GUI reaches the console's livestream
+pane (`mission-control.md`).
 
 ## Use local JupyterLab with a remote kernel
 
 `antioch jupyter lab --no-open --verbose` runs JupyterLab locally against the
-assigned machine's kernel. Notebooks, scripts, and saves are ordinary local
+assigned machine's kernel and prints the verified URL. Notebooks, scripts,
+and saves are ordinary local
 files, and Lab's terminal is a local shell. Only the kernel is remote and it
-outlives the Lab process. Start the development session separately when local
+outlives the Lab process. (Mission Control serves a hosted Lab through its
+own gateway instead — do not start one there by hand.) Start the development
+session separately when local
 edits should reach the running services:
 
 ```bash
@@ -61,8 +69,9 @@ culled.
 
 ## Direct shells
 
-The `antioch services ssh` command opens a PTY in `sim` by default. It resolves
+The `antioch services ssh` command opens a PTY in `sim` by default — when the
+stack has no sim service, name the service explicitly. It resolves
 an existing assignment and is not an admitted, timed process. Use
-`antioch services exec sim python` for scripts that need faithful exit status, timeout,
-or optional streaming; use `antioch machine ssh` for a VM-shell diagnostic. See
+`antioch services exec sim python` for scripts that need a faithful exit
+status; use `antioch machine ssh` for a VM-shell diagnostic. See
 `machines.md` for direct transfer and service selection.

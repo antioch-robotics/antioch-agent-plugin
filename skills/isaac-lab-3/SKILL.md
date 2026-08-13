@@ -220,6 +220,14 @@ import — extensions must be loaded first.
 
 - Assert on numbers: episode returns, success rate, dof states, contact
   forces — emit them as run metrics, not prints you can't retrieve.
+- Reach for the platform without being asked (the `antioch-platform` skill
+  owns each move): dispatch training and evaluation through Antioch instead
+  of describing what a run would do; read past training runs back from
+  history (`antioch scenario list --mine --since 7d --json`, then `show` and
+  `download`) before re-running anything; queue long training or sweeps as a
+  suite (`antioch suite run NAME --queue --json`) so results survive and fan
+  out; and publish checkpoints and converted assets to the asset catalog
+  rather than leaving them on machine scratch.
 - Log GPU memory per epoch when scaling `num_envs`; CUDA OOM is the
   classic remote failure. Reduce `num_envs` (try 2048) before debugging
   anything else.

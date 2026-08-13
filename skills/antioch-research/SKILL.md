@@ -250,7 +250,7 @@ their citations, is the intended use.
 * **Short queries.** Spend the ten extra seconds writing a detailed query
   — it pays back in retrieval quality.
 * **Corpus-filtering the first pass.** The default diversifies across all
-  18 corpora; drill in only after a broad search told you where the answer
+  19 corpora; drill in only after a broad search told you where the answer
   lives.
 * **`research_open` as a first move.** Search first; open only the
   artifact a card pointed at. Opening whole files speculatively floods the

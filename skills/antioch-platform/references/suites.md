@@ -22,7 +22,8 @@ suites:
 
 Fields inside one clause narrow together; clauses are unioned in authored
 order. Paths, scenario names, case ids, required tags, and excluded tags are
-exact selection inputs. Validate the expanded catalog locally:
+exact selection inputs (`manifest.md` owns the clause schema). Validate the
+expanded catalog locally:
 
 ```bash
 antioch suite collect --json
@@ -48,11 +49,18 @@ antioch suite show SUITE_RUN_ID --follow --json
 ```
 
 Queueing is the immutable-environment boundary. The submitter builds the
-selected project services, adds the current project source to the simulation image,
+selected project services **on the project's current machine** — use
+`machine checkout` to pick the stager — adds the current project source to
+the simulation image,
 pulls private images with the local Docker credential, and pushes the resolved
-images into your organization's private registry. Antioch distributes the suite's scenario runs
-across eligible machines. Queued workers are headless; development `watch`
-rules and `ports` tunnels are not part of the queued environment.
+images into your organization's private registry. Antioch distributes the
+suite's scenario runs
+across eligible machines that run independently of the staging machine.
+Queued workers are headless; development `watch`
+rules and `ports` tunnels are not part of the queued environment. Do not
+combine `--queue` with a typed `--stream`, `--verbose`, `--raw-logs`,
+`--machine`, or `--machines`; `--json` on `suite run` requires `--queue`
+(`running.md` explains the constraints).
 
 Queued runs save their exact digest-pinned environment before Antioch
 distributes them. For a single-machine interactive suite run, Antioch captures
@@ -64,7 +72,9 @@ publish succeeds, queue the completed suite again exactly as it ran:
 antioch suite rerun SUITE_RUN_ID
 ```
 
-Multi-machine interactive runs are not currently rerunnable. Repeat the
+The webapp's Re-run button is the GUI twin of `suite rerun` and
+`scenario rerun`. Multi-machine interactive runs are not currently
+rerunnable. Repeat the
 original command or use `--queue` when the result must be rerunnable. Antioch
 explains when an older run or a failed source capture or publish leaves the
 environment unavailable.
@@ -76,8 +86,7 @@ antioch scenario run --tag smoke --queue --json
 ```
 
 That form creates standalone scenario runs rather than a named suite
-parent. The exact queue restrictions and available options are in
-`antioch scenario run --help`.
+parent.
 
 ## History and cancellation
 
@@ -88,7 +97,10 @@ antioch suite list --json
 antioch suite summary --json
 ```
 
-Use the `--cursor` returned by a JSON page to continue that same query. Cancel
+Inside a project both default to that project; add `--all-projects` to widen
+the view. `suite summary` lists named suites with their latest-run state —
+the fastest answer to "how is the nightly doing". Use the `--cursor` returned
+by a JSON page to continue that same query. Cancel
 queued or running work by its suite-run id:
 
 ```bash
@@ -99,7 +111,15 @@ Finished member scenarios remain in the suite history; unclaimed queued runs are
 cancelled and active processes are signalled. Check `antioch suite cancel
 --help` before automating cancellation and confirm the organization-wide impact.
 
+## Comparing suite runs
+
+The webapp's Compare view takes two to eight suite runs and shows pass rate,
+duration, and a scenario-by-scenario result matrix. The CLI has no `compare`
+command — the agent path is JSON: pull each run with
+`antioch suite show SUITE_RUN_ID --json` (its `scenario_runs` array carries
+every member's outcome and results) and diff the fields that matter.
+
 Suite `--phase` and `--outcome` filters are repeatable unions in both `list`
 and `summary`; every finite JSON result is one document and every `*_at` value
-is Unix microseconds. Followed JSON is explicit NDJSON. See `json.md` for the
+is Unix microseconds. Followed JSON is explicit NDJSON. See `cli.md` for the
 shared contract and each command's `--help` for its current fields.

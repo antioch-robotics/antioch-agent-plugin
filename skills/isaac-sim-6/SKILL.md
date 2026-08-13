@@ -75,7 +75,7 @@ def main() -> None:
 Streaming is exclusively the CLI's, and simulation runs stream **by
 default** — `antioch run`, `antioch scenario run`, and `antioch suite run`
 reserve the machine livestream unless you pass `--no-stream`.
-`antioch services exec` is off by default and takes an explicit `--stream`,
+`antioch services exec` never reserves the stream (it has no stream option),
 and `antioch jupyter stream` declares it for a kernel **before**
 `antioch.boot()` is called in a cell or notebook. Neither
 `antioch.boot()` nor `BootProfile` accepts a `stream` option or stream tuning;
@@ -255,6 +255,12 @@ carry one convention into the other stack.)
 - The stage runs on the machine, not on the laptop. Use the browser stream for
   interactive inspection, then assert on simulated state numerically (poses,
   contact forces, joint positions) and save the measurements with the run.
+- Before importing or converting a robot, prop, or environment the user
+  names, search the shared asset catalog first
+  (`antioch assets list -q franka --json` — the `antioch-platform` skill's
+  assets reference); import only what the catalog does not already hold.
+- Prefer a decorated scenario over `antioch run` the moment evidence must
+  persist — metrics, artifacts, and telemetry survive only on a recorded run.
 - First-launch MDL shader compile takes 5–15 min on a cold machine — a slow
   first step is not a hang. Antioch's warm images pre-warm this, but budget
   for it on cold starts.

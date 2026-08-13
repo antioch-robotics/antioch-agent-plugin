@@ -29,6 +29,18 @@ telemetry, choosing 0.36.0 blueprint constructors, or diagnosing a recording
 — a dashboard that is empty, grey, black, or short of frames, an `.rrd` that
 will not open, or entity paths that never appear.
 
+## Reach for the platform
+
+Two platform moves belong in every design loop (the `antioch-platform` skill
+owns both). When the scenario needs a scene, robot, or prop, search the
+shared asset catalog before building geometry by hand:
+`antioch assets list -q warehouse --json`, then `antioch.load_asset(...)` in
+the body. And when a designed scenario should become a repeatable
+evaluation, queue it (`antioch scenario run --tag smoke --queue --json`) or
+rerun a captured run (`antioch scenario rerun SCENARIO_RUN_ID`) instead of
+re-dispatching by hand — queued and captured runs keep their exact
+environment.
+
 ## Research first
 
 Scenario code is raw Isaac + Rerun code. Before writing or debugging any of

@@ -3,7 +3,9 @@
 Antioch has two execution surfaces. `antioch run` is a one-off probe whose
 stdout, stderr, and exit status belong to the Python process. `antioch scenario
 run` selects authored scenarios and records their outcome, parameters, logs,
-telemetry, and artifacts.
+telemetry, and artifacts. Both need a `services.sim` entry in the manifest —
+a service-only stack refuses Isaac dispatch until one is declared
+(`manifest.md`).
 
 ## Start an interactive stack
 
@@ -13,13 +15,18 @@ For an edit-and-rerun loop, start a development session first:
 antioch services up --watch
 ```
 
-The manifest's required `services.sim` entry is the default service. `services up` builds changed
-services, starts their dependencies, waits for health checks, and returns a service
-table. `--watch` is a foreground session that applies `watch` rules while declared
-ports remain reachable. Ctrl-C ends the watcher but leaves containers and declared ports
-running; use `antioch services down` to stop them. A `sync` rule batches file changes, `sync+exec` runs its command
+`services up` builds changed
+services, starts their dependencies, waits for health checks, and returns a
+service
+table. `--watch` is a foreground session that applies `watch` rules while
+declared
+ports remain reachable. Ctrl-C ends the watcher but leaves containers and
+declared ports
+running; use `antioch services down` to stop them. A `sync` rule batches file
+changes, `sync+exec` runs its command
 afterward, `sync+restart` restarts only that service, and `rebuild` rebuilds the
-service and its dependents. If a watched service exits, the session fails
+service and its dependents (`manifest.md` owns the decision table). If a
+watched service exits, the session fails
 loudly; fix the project and run `services up` again.
 
 ## One-off probes
@@ -29,7 +36,7 @@ antioch run scripts/evaluate.py -- --episodes 20
 ```
 
 `FILE` is a project-local Python file. Arguments after `--` reach the script
-unchanged. The command has no JSON wrapper because the program owns stdout;
+unchanged. The command has no JSON output because the program owns stdout;
 use a scenario when a result must be retained. `--machine MACHINE` pins an
 assigned machine, `--timeout` bounds the process, and `--no-stream` opts out of
 the default livestream. Check `antioch run --help` for the exact option set.
@@ -55,11 +62,15 @@ antioch scenario run --scenario bin_pick --case nominal
 A scenario without `--case` runs its declared cases. `--case` and `--set` each
 address exactly one `--scenario`, and they cannot be combined. `--machine
 MACHINE` selects exact machines for the run; `--machines INTEGER` bounds
-parallel use. The parser's current constraints and stream options are always
-shown by `antioch scenario run --help`.
+parallel use.
 
-Foreground scenario output is a live board (or process output with `--verbose`)
-and deliberately has no JSON wrapper. Read durable truth after it finishes:
+## Watching output
+
+Foreground scenario output is a live board and deliberately has no JSON
+output. Two escalations exist when the board hides what you need:
+`--verbose` relays the process output while filtering Kit engine noise, and
+`--raw-logs` relays every byte unfiltered (it implies `--verbose`). Read
+durable truth after the run finishes:
 
 ```bash
 antioch scenario show SCENARIO_RUN_ID --json
@@ -75,11 +86,21 @@ Add `--queue` to a scenario selection to submit it headlessly:
 antioch scenario run --scenario bin_pick --queue --json
 ```
 
-The submitter builds or resolves every selected service, adds the current
-project source to the simulation image, and retains the digest-pinned
-environment with the run. Antioch distributes runs across eligible machines;
-workers consume those same service bytes. Development `watch` rules and
+The submitter builds or resolves every selected service **on the project's
+current machine** — `machine checkout` selects that staging machine — adds
+the current project source to the simulation image, and retains the
+digest-pinned
+environment with the run. Antioch then distributes runs across eligible
+machines that are independent of the stager. Development `watch` rules and
 `ports` tunnels are absent from the queued environment.
+
+Queue flag constraints: do not combine `--queue` with a typed `--stream`,
+with `--verbose` or `--raw-logs`, or with `--machine` or `--machines` — each
+is refused. `--restart` has no effect on queued work (workers always start a
+fresh stack), and `--json` on a dispatch command requires `--queue`. Cancel a
+queued or running standalone scenario with
+`antioch scenario cancel SCENARIO_RUN_ID --json`; suite members are cancelled
+through `suite cancel` (`suites.md`).
 
 Queued runs save their exact digest-pinned environment before Antioch
 distributes them. For a single-machine interactive run, Antioch captures the
@@ -102,8 +123,10 @@ already owns that publication, so edits are never hidden behind a stale upload.
 Simulation runs stream by default. `--no-stream` makes a run headless, while an
 explicit `--stream` requires the machine's single livestream lease. A busy
 lease makes an explicit request fail; an unqualified default can continue
-headlessly with a notice. Queued runs are headless by contract. Direct
-`antioch services exec` does not reserve a stream unless `--stream` is supplied.
+headlessly with a notice. Queued runs are headless by contract.
+`antioch services exec` never reserves the livestream — the lease is taken by
+default by `antioch run`, `scenario run`, and `suite run`, and declared for a
+kernel by `antioch jupyter stream` (`sessions.md`).
 
 If local discovery fails before a machine is requested, check for a simulator
 import at module scope and rerun `antioch scenario collect --json`. If a

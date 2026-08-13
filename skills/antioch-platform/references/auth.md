@@ -13,9 +13,10 @@ antioch auth login
 
 - `antioch auth whoami --json` names the user and active organization. Run this
   first when identity or access is unclear.
-- `antioch auth switch` is an interactive organization selector. It has no JSON
-  wrapper. The selected organization owns every run and asset created
-  afterwards.
+- `antioch auth switch --org ORG` selects an organization without a prompt;
+  add `--json` to emit the resulting identity. Without `--org`, the command
+  remains an interactive selector. The selected organization owns every run
+  and asset created afterwards.
 - `antioch auth logout --json` removes the local login and machine access from this computer.
 
 ## Account settings
