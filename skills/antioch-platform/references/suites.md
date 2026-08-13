@@ -107,6 +107,14 @@ queued or running work by its suite-run id:
 antioch suite cancel SUITE_RUN_ID --json
 ```
 
+Suite list, summary, and show JSON use a customer-facing projection. It keeps
+suite and scenario identities, project and dispatch provenance, lifecycle and
+outcome, child counters, timings, results, logs, artifacts, and rerun
+capabilities. It omits tenant keys, raw user subjects, queue claims,
+assignment and process identities, attempt counts, and generation fields. The
+member records inside `suite show` use the same scenario projection as
+`scenario list` and `scenario show`.
+
 Finished member scenarios remain in the suite history; unclaimed queued runs are
 cancelled and active processes are signalled. Check `antioch suite cancel
 --help` before automating cancellation and confirm the organization-wide impact.

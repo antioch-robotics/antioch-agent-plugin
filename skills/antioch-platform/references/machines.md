@@ -135,6 +135,10 @@ antioch services cp sim:/workspace/output/result.png ./result.png --json
 
 Name the service explicitly with `SERVICE:PATH` on exactly one side; use
 `antioch machine ssh` for VM filesystem access.
+For directory transfers, a destination ending in `/` is explicit directory
+syntax and places the source basename below it. Without the trailing slash,
+the destination path receives the source contents. Use the slash when a
+script must make the destination directory boundary clear.
 `/workspace/output` is assignment scratch and can disappear at release. Put
 durable results in scenario artifacts or the asset store. Add `--json` for one
 transfer manifest with the direction, path, byte count, checksum, and

@@ -46,6 +46,13 @@ dispatch type, phase, and outcome.
   `next_cursor` back as `--cursor` and keep fetching while it is non-null. A
   cursor pins its page's whole query — repeat no filters beside it.
 
+Scenario list and show JSON use a customer-facing projection rather than the
+Rome record. It keeps the run and suite identities, project, machine and
+dispatch provenance, authored inputs, lifecycle and outcome, timings, results,
+logs, artifacts, and capability flags. It does not include tenant IDs, raw
+user subjects, queue claims, assignment or process identities, attempt counts,
+or generation fields. The same projection is used for list rows and show.
+
 ## Discovering filter values
 
 - `antioch scenario suggest tag --json` returns distinct stored values and
@@ -57,7 +64,9 @@ dispatch type, phase, and outcome.
 
 ## Inspecting one run
 
-- `antioch scenario show SCENARIO_RUN_ID --json` — the complete run: phase, outcome, parameters, results, artifact index, timing, and links to its suite, project, and command. Integer timestamps are Unix microseconds.
+- `antioch scenario show SCENARIO_RUN_ID --json` — the customer-facing run:
+  phase, outcome, parameters, results, artifact index, timing, and links to its
+  suite, project, and command. Integer timestamps are Unix microseconds.
 - `antioch scenario show SCENARIO_RUN_ID --logs --service sim` — show captured
   logs for one project service. Bare `--logs` lists every service with its size,
   then shows `sim` (the primary run diagnostic); pass `--service` for another

@@ -30,8 +30,8 @@ and exit 0. An unknown name gets a "did you mean" suggestion.
 
 | Command | Purpose | Key options | JSON |
 |---|---|---|---|
-| `scenario list` | Filter tenant-shared run history | `-q/--search`, `--scenario`, `--project`, `--suite`, `--suite-run-id`, `--invocation-id`, `--dispatched-from`, `--user`/`--mine`, `-t/--tag`, `--no-suite`, `--param`, `--result`, `--since`/`--until`, `--dispatch`, `--phase`, `--outcome`, `--cursor`, `--limit` (1–200, 50) | `{items, next_cursor}` of complete run records |
-| `scenario show SCENARIO_RUN_ID` | One run: phase, outcome, params, results, checks, artifact index | `--logs`, `--service` (requires `--logs`) | bare record |
+| `scenario list` | Filter tenant-shared run history | `-q/--search`, `--scenario`, `--project`, `--suite`, `--suite-run-id`, `--invocation-id`, `--dispatched-from`, `--user`/`--mine`, `-t/--tag`, `--no-suite`, `--param`, `--result`, `--since`/`--until`, `--dispatch`, `--phase`, `--outcome`, `--cursor`, `--limit` (1–200, 50) | `{items, next_cursor}` of curated run records |
+| `scenario show SCENARIO_RUN_ID` | One run: phase, outcome, params, results, checks, artifact index | `--logs`, `--service` (requires `--logs`) | curated record |
 | `scenario logs SCENARIO_RUN_ID` | Replay captured output — stdout to stdout, stderr to stderr | `--stdout`/`--stderr` (exclusive), `-f/--follow`, `--raw-logs` | `{items, next_cursor: null}` of log entries |
 | `scenario download SCENARIO_RUN_ID` | Signed-storage artifact download into `./SCENARIO_RUN_ID/` | `--artifact` (repeatable, logical key), `-o/--output`, `--force` | transfer manifest with per-file `sha256` |
 | `scenario cancel SCENARIO_RUN_ID` | Cancel a standalone queued or running scenario run | — | cancellation object with `changed` |
@@ -44,9 +44,9 @@ and exit 0. An unknown name gets a "did you mean" suggestion.
 
 | Command | Purpose | Key options | JSON |
 |---|---|---|---|
-| `suite list` | Suite runs; the current project is the default filter inside a project | `--suite`, `--project`, `--all-projects`, `--phase`, `--outcome`, `--user`/`--mine`, `--since`/`--until`, `--dispatch`, `--cursor`, `--limit` | `{items, next_cursor}` |
-| `suite summary` | Named suites with latest-run state | `-q/--search` plus the `list` filters, `--limit` (1–500, 50) | `{items, next_cursor}` |
-| `suite show SUITE_RUN_ID` | One suite run with its member scenario runs | `--suite` (only for a legacy id), `-f/--follow` | bare object; `--follow --json` is NDJSON state frames ending in a `completed` frame |
+| `suite list` | Suite runs; the current project is the default filter inside a project | `--suite`, `--project`, `--all-projects`, `--phase`, `--outcome`, `--user`/`--mine`, `--since`/`--until`, `--dispatch`, `--cursor`, `--limit` | `{items, next_cursor}` of curated suite records |
+| `suite summary` | Named suites with latest-run state | `-q/--search` plus the `list` filters, `--limit` (1–500, 50) | `{items, next_cursor}` of curated summaries |
+| `suite show SUITE_RUN_ID` | One suite run with its member scenario runs | `--suite` (only for a legacy id), `-f/--follow` | curated object; `--follow --json` is NDJSON state frames ending in a `completed` frame |
 | `suite cancel SUITE_RUN_ID` | Cancel unclaimed members and signal active processes | — | adds `changed` |
 | `suite rerun SUITE_RUN_ID` | Queue a completed suite again | — | bare queued suite object |
 | `suite delete` | Delete suite runs AND their member scenario runs | `--run`, `--suite` (both repeatable), `--yes` | requires `--yes` |
@@ -75,7 +75,7 @@ and exit 0. An unknown name gets a "did you mean" suggestion.
 | `services build` | Build without starting | `--service` (repeatable) | build results |
 | `services exec SERVICE CMD...` | Run CMD in a service; unknown options pass through to CMD; exit code is the command's | — (no options of its own) | none |
 | `services ssh` | Interactive PTY in a service; optional `SERVICE` positional, default `sim` when present | — | none |
-| `services cp SRC DST` | Copy files/directories; exactly one side is `SERVICE:PATH`; symlinks copied as links | — | manifest with `direction`, `size_bytes`, `sha256` |
+| `services cp SRC DST` | Copy files/directories; exactly one side is `SERVICE:PATH`; a destination ending in `/` is a directory and receives the source basename, while a destination without `/` receives the source contents; symlinks copied as links | — | manifest with `direction`, `size_bytes`, `sha256` |
 | `services images` | List retained build products (bare group invocation) | — | build products |
 | `services images pull SERVICE` | Export a built service image to the local Docker daemon | `--tag` | export manifest |
 
