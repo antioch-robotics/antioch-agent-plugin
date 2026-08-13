@@ -33,7 +33,7 @@ The plugin uses the Antioch CLI to run simulations and the
 way to install both is with [`uv`](https://docs.astral.sh/uv/getting-started/installation/). After installing `uv`, run:
 
 ```bash
-uv tool install antioch-sim
+uv tool install --python 3.12 antioch-sim
 uv tool update-shell
 ```
 
@@ -53,10 +53,15 @@ covers project setup, engine selection, and your first run.
 
 ## Install the plugin
 
+The commands below install released version `v0.2.7`. To install the moving
+`main` branch instead, remove `#v0.2.7` from the Claude Code URL or remove
+`--ref v0.2.7` from the Codex command. A floating install can change without
+notice.
+
 ### Claude Code
 
 ```bash
-claude plugin marketplace add antioch-robotics/antioch-agent-plugin
+claude plugin marketplace add antioch-robotics/antioch-agent-plugin.git#v0.2.7
 claude plugin install antioch@antioch
 ```
 
@@ -72,7 +77,7 @@ Claude Code can show a new project MCP server as pending until you approve it.
 ### Codex
 
 ```bash
-codex plugin marketplace add antioch-robotics/antioch-agent-plugin
+codex plugin marketplace add antioch-robotics/antioch-agent-plugin.git --ref v0.2.7
 codex plugin add antioch@antioch
 ```
 

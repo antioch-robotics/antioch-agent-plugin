@@ -14,12 +14,23 @@ its whole file/page.
 ## The hard rule
 
 **Before writing, reviewing, or debugging anything that touches an indexed
-substrate, call a retrieval tool.** Use `research_grep` first for a
-symbol-qualified lookup (an enum member, exact method, or dotted name), then
-chain `research_open` on the matching artifact. Use `research_search` first
-for conceptual or natural-language questions. The index is ground truth at
-the pinned versions and a search costs seconds; guessing an API and burning a
-turn discovering the guess was wrong costs far more. Do not skip the lookup
+substrate, call a retrieval tool.** Which tool depends on one question: do
+you KNOW the symbol, or are you GUESSING it?
+
+* **Know it** — you read it in a hit, a traceback, an error string, or the
+  user's code. Use `research_grep`, then chain `research_open` on the
+  matching artifact. Grep confirms exact strings well.
+* **Guessing it** — you are inferring a plausible name. Use
+  `research_search`. Grep is AND-of-tokens, so a wrong guess returns almost
+  nothing, and thin grep output is indistinguishable from "this API does not
+  exist". Grepping the invented `RtxRadar` returns noise; the real symbols
+  are `Radar`, `RadarSensor`, and `OmniRadar`, and only semantic search
+  finds them.
+
+Use `research_search` first for conceptual or natural-language questions.
+The index is ground truth at the pinned versions and a search costs
+seconds; guessing an API and burning a turn discovering the guess was wrong
+costs far more. Do not skip the lookup
 because the API feels familiar — adapted NVIDIA content and model memory both
 carry stale local-install-era surfaces. The skills in this plugin orient
 (concepts, architecture, recipes, invariants); research grounds (signatures,
@@ -49,7 +60,7 @@ filters worth setting, and only when the intent is clearly one or the other.
 | `isaac-lab-docs` | 3.0.0-beta2 | Isaac Lab documentation |
 | `isaac-lab-source` | v3.0.0-beta2 | Isaac Lab source and scripts |
 | `omniverse-docs` | dated crawl | Omniverse ecosystem: Omni Physics, Extensions, Materials + Rendering, USD, CAE |
-| `kit-docs` | Kit 110.1.2 | Kit Manual |
+| `kit-docs` | dated crawl | Kit Manual |
 | `openusd-docs` | dated crawl | OpenUSD user guides + Doxygen API |
 | `physx-docs` | 5.6.1 | PhysX solver reference: iterations, contacts, soft bodies, attachments |
 | `newton-docs` | dated crawl | Newton differentiable physics backend |
@@ -64,10 +75,21 @@ filters worth setting, and only when the intent is clearly one or the other.
 | `curobo-source` | v0.8.0 | NVIDIA cuRobo Python source |
 | `rsl-rl-source` | v5.0.1 | rsl-rl-lib source at Isaac Lab 3.0.0-beta2's exact pin — its default RL training library |
 
-Legacy and deprecated paths are excluded from every corpus. Call
-`research_versions` once at the start of version-sensitive work — if the
-user is on a different Isaac or Kit version, say so and treat hits as
-approximate.
+`deprecated/`, `legacy/`, and archived-version doc trees are excluded at
+ingest, so a superseded page cannot outrank its current one. Two things
+that filter cannot decide for you still need your eyes:
+
+* **`experimental` is not a synonym for stale.** In Isaac Sim 6,
+  `isaacsim.sensors.experimental.rtx` is the CURRENT RTX sensor API while
+  `isaacsim.sensors.rtx` is the deprecated one — one path segment apart,
+  different behavior. Read the path on every hit and prefer the one the
+  pinned version ships.
+* **A dated crawl is not a pinned version.** `research_versions` reports a
+  crawl date, not an upstream release, for the ten corpora marked "dated
+  crawl" above. For those, read the version out of the page title or URL of
+  a hit instead. Call `research_versions` at the start of version-sensitive
+  work; if the user is on a different Isaac or Kit version, say so and treat
+  hits as approximate.
 
 ## Proactive triggers
 
@@ -107,10 +129,17 @@ will surface, not a filter to set:
    intents: "the entire Articulation class", "the full camera tutorial".
 5. **`research_grep(pattern)`** — token matching over everything indexed:
    symbols, error strings, and config keys when semantic search is too fuzzy.
-   Multi-word patterns are AND-of-tokens; use the `verbatim` marker to tell
-   whether the complete string occurs in the chunk, then open a matching
-   artifact with `research_open`.
+   Multi-word patterns are AND-of-tokens, so rows can match every token
+   without holding the string. Only the negative case is labelled: a row
+   tagged `[tokens match; exact string not in this chunk]` is a token-only
+   hit, and an unlabelled row is verbatim. Then open a matching artifact
+   with `research_open`.
 6. **`research_versions()`** — what is indexed, at which pins.
+
+Scores are relative to one query, never across queries: a 0.86 on a long
+multi-clause question is not weaker evidence than a 0.95 on a short one.
+`research_artifacts` scores are whole-artifact sums and routinely exceed
+1.0, so never compare them against `research_search` scores.
 
 A worked loop — localizing a sensor bug:
 
@@ -131,8 +160,12 @@ research_open(artifact="abc123")                # the whole runtime, if needed
 **Pass `kind='source'` when localizing code for a bug or feature.** On the
 internal edit-recall benchmark (107 tasks mined from real Isaac Lab PRs),
 task-aware `kind='source'` filtering measured **+5.6 points** of recall@10
-over the unfiltered baseline — the single largest free win the benchmark
-found. Use `kind='docs'` for conceptual and tutorial questions.
+over the unfiltered baseline. It is not unconditional: when a query is
+already code-shaped, ranking returns source anyway and the filter only
+removes the docs safety net — a measured probe kept ranks 1-5 identical and
+lost a relevant docs hit at rank 6. Set it when docs pages are crowding out
+code, not by reflex. Use `kind='docs'` for conceptual and tutorial
+questions.
 
 ## How to write a good query
 
@@ -176,8 +209,12 @@ What makes a query good:
 
 What makes a query bad:
 
-* **One or two words.** "drive stiffness" retrieves noise — add the class,
-  the engine, and the goal.
+* **Speculative clauses.** Detail narrows; it does not automatically
+  improve. Every clause you add is a claim about what the answer contains.
+  A correct clause earns a precise hit; a guessed one trades away breadth.
+  Short queries are not automatically bad — "drive stiffness" alone returns
+  the PhysX articulation-drive reference and the gain tuner. Add detail you
+  are confident about, then drill.
 * **Corpus-filter-first.** The diversified default finds the right corpus
   for you.
 * **Asking for an answer instead of the relevant text.** "Tell me X" does
