@@ -42,7 +42,24 @@ module-scope `class MyWriter(Writer)` is a module-scope `omni` import.
 The legacy `isaacsim.sensors.camera.Camera` and `isaacsim.sensors.physics.*`
 classes still load in 6.0, but their implementations moved to the
 `experimental.*` extensions — deprecated; prefer the `experimental.*` stack
-for new code.
+for new code. Antioch blocks construction of the legacy camera because its
+second render product can hang `World.step(render=True)` forever on the stock
+Isaac Sim 6.0.1 image. For a screenshot of the active USD camera, use the
+bounded `antioch.capture_viewport()` helper instead:
+
+```python
+def capture_active_view() -> object | None:
+    # Point `/OmniverseKit_Persp` (or another active USD camera) with Kit's
+    # normal viewport helpers before this call.
+    import antioch
+
+    return antioch.capture_viewport()
+```
+
+The helper reads Antioch's existing viewport product and never creates a
+second product. It returns `None` when the active viewport has no product yet;
+retry after a rendered step or use `isaacsim.sensors.experimental.rtx` for
+per-camera RGB/depth/AOV data.
 
 ## The two readback models — pick the right one
 

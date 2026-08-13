@@ -15,8 +15,28 @@ Two layers stack:
    annotators, or applies lens distortion.
 
 The legacy `isaacsim.sensors.camera.Camera` still loads as a full deprecated
-implementation — prefer `experimental.rtx` for new code. Migration table at
-the bottom.
+implementation, but Antioch raises `UnsupportedCameraError` before it can
+create a second render product. On the stock 6.0.1 image that product can
+leave `World.step(render=True)` blocked forever. Use the active viewport
+capture for one existing camera view, or migrate to `RtxCamera` plus
+`CameraSensor` for explicit AOVs. Migration details are at the bottom.
+
+### One active-viewport frame
+
+Use the SDK helper when the browser view and the saved image should come from
+the same active USD camera:
+
+```python
+def capture_viewport_frame() -> object | None:
+    import antioch
+
+    return antioch.capture_viewport()
+```
+
+Call it after `world.step(render=True)`. The read-back pumps Kit a bounded
+number of times and returns `None` rather than waiting forever. It does not
+create a render product. Use the RTX stack below when a run needs a dedicated
+camera, multiple views, or named AOVs.
 
 ## Fundamentals
 

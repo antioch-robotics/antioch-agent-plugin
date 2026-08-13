@@ -27,6 +27,9 @@ evidence that survives it. For run logs and artifact downloads, load the
 | RL agent fights the drives | PD drives left active | zero stiffness/damping, or no DriveAPI authored |
 | Newton + torch hang at startup | CUDA context conflict | import torch only after `timeline.play()` + settle |
 | Unexpected physics behavior | Newton switched on explicitly earlier | check `SimulationManager.get_active_physics_engine()` — enabling the extension alone only registers it |
+| `Engine 'newton' not found. Available: PhysX` | Newton was not enabled before boot | restart with `antioch.boot(physics_engine="newton")`; the profile adds both extensions and auto-activation |
+| `Detach stage` during Newton startup | Isaac Sim releases the default PhysX stage | keep the warning as evidence; accept it only when the active engine is `newton` and the run advances |
+| Franka experimental IK reports a DOF mismatch on Newton | Isaac Sim 6.0.1 shipped Franka helper is PhysX-only | use `antioch.boot(physics_engine="physx")`, or build and calibrate a Newton-native controller with an explicit DOF map |
 
 ## Run-level failures (fix in scene/config, or wait)
 

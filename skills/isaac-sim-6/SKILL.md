@@ -70,6 +70,7 @@ def main() -> None:
 | `render_quality` | Isaac defaults | DLSS preset: `performance`/`balanced`/`quality`/`ultra` |
 | `viewport` | 1280×720 | Headless render size; a streamed boot ignores it |
 | `physics_dt` / `render_dt` | 1/60 each | Physics substep and render step; `render_dt` must be an integer multiple of `physics_dt` |
+| `physics_engine` | `"physx"` | Backend selected before the first stage; `"newton"` enables Isaac Sim's experimental Newton extensions |
 | `extra_args` | `()` | Native Kit CLI arguments appended after Antioch's defaults |
 
 Streaming is exclusively the CLI's, and simulation runs stream **by
@@ -172,15 +173,20 @@ at runtime (inside a function, per Rule #1):
 
 ```python
 def use_newton() -> None:
-    from isaacsim.core.simulation_manager import SimulationManager
+    import antioch
 
-    SimulationManager.switch_physics_engine("newton")  # or "physx"
+    # A default boot registers PhysX only. The public profile enables the
+    # Newton extensions and auto-switch setting before the stage opens.
+    antioch.boot(physics_engine="newton")
 ```
 
 Newton is experimental in 6.0. Enabling the `isaacsim.physics.newton`
-extension registers it but does not activate it by default — activation needs
-`/exts/isaacsim.physics.newton/auto_switch_on_startup=true` or an explicit
-`switch_physics_engine("newton")`. When it matters, check
+extension registers it but does not activate it by default. Use
+`antioch.boot(physics_engine="newton")`; Antioch enables
+`isaacsim.physics.newton`, `isaacsim.physics.newton.tensors`, and
+`/exts/isaacsim.physics.newton/auto_switch_on_startup=true` before the stage
+opens. If native code reports `Engine 'newton' not found`, the process was
+booted without those extensions. When it matters, check
 `SimulationManager.get_active_physics_engine()` rather than assuming PhysX.
 
 ## The boot / step / readback loop
@@ -291,10 +297,17 @@ carry one convention into the other stack.)
    for certain collision approximations — validate with collision
    visualization. See `references/physics.md`.
 7. Sensors: `play(commit=True)` before `get_data()`; velocities after play.
+   Do not construct `isaacsim.sensors.camera.Camera`: Antioch raises a named
+   `UnsupportedCameraError` before its second render product can hang
+   `World.step(render=True)`. Point the active viewport at a USD camera and
+   use `antioch.capture_viewport()`, or use the experimental RTX camera API.
 8. `torch` imported before the app/physics settles → CUDA context conflict
    hangs Kit. Defer torch until after boot + settle.
 9. Newton registers when its extension is enabled but activates only on an
-   explicit switch — verify the active engine instead of assuming PhysX.
+   explicit switch — use `antioch.boot(physics_engine="newton")` and verify
+   the active engine instead of assuming PhysX. The first Newton workload can
+   compile Warp/Newton CUDA kernels for about two minutes; later runs reuse the
+   cache.
 10. `get_rigid_body_state()` does not exist in 6.0 — use
     `RigidPrim.get_world_poses()`.
 

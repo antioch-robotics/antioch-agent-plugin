@@ -23,18 +23,35 @@ All `pxr`/`isaacsim` imports belong inside function bodies (the skill's Rule
 
 ## Backend selection
 
-`isaacsim.core.simulation_manager` owns engine registration. Default engine is
-`physx`; enabling the `isaacsim.physics.newton` extension registers Newton but
-does not activate it — activation needs
-`/exts/isaacsim.physics.newton/auto_switch_on_startup=true` or an explicit
-`SimulationManager.switch_physics_engine("newton")`. Always check:
+`isaacsim.core.simulation_manager` owns engine registration. Antioch boots
+PhysX by default. Select Newton in the boot profile so its extensions and
+auto-switch setting are present before the first stage opens:
+
+```python
+import antioch
+
+antioch.boot(physics_engine="newton")
+```
+
+For a native engine check, always inspect the active backend:
 
 ```python
 from isaacsim.core.simulation_manager import SimulationManager
 
-SimulationManager.switch_physics_engine("newton")  # or "physx"
+# `antioch.boot(physics_engine="newton")` already switched the backend.
 print(SimulationManager.get_active_physics_engine())
 ```
+
+Calling the native switch without first booting the Newton extensions reports
+`Engine 'newton' not found. Available: PhysX`. Restart with
+`antioch.boot(physics_engine="newton")`; a second boot cannot change the
+profile. The first Newton workload can compile Warp/Newton CUDA kernels for
+about two minutes on a fresh machine. Later runs reuse the engine cache.
+
+Some Isaac Sim 6.0.1 Newton starts also print a `Detach stage` warning while
+the default PhysX stage is released. Treat it as expected only when the active
+engine check reports `newton` and the run advances. If Newton is not active or
+the run stops, keep the warning as upstream evidence instead of suppressing it.
 
 When the Newton extension is enabled, its USD integration exposes
 `NewtonConfig` (per-sim settings), `XPBDSolverConfig`, `MuJoCoSolverConfig`,

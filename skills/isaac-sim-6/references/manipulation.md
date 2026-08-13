@@ -43,6 +43,27 @@ The verified 6.0.1 stack from there: wrap the referenced Franka in
 and drive it with the Franka RMPflow motion-policy config — run live, that
 combination produced real finite pick-and-place trajectories.
 
+### Newton and the shipped Franka experimental IK
+
+The shipped Franka experimental IK helper is a PhysX path on Isaac Sim
+6.0.1. With Newton active, the helper's target translation and Jacobian path
+does not agree with the composed Franka articulation's DOF metadata: the
+Newton tensor reports an extra DOF and the later Jacobian has the wrong shape.
+This is an upstream integration defect, not a reason to slice tensors until
+the numbers fit. Use the default PhysX boot for this helper:
+
+```python
+import antioch
+
+antioch.boot(physics_engine="physx")
+```
+
+If Newton is required, use a Newton-native controller with an explicit,
+verified DOF map and calibrate its joint limits and end-effector frame against
+the actual composed asset. Low-level joint targets are not an equivalent IK
+fix. Record the engine, `dof_names`, Jacobian shape, and solver result in the
+run so a future Isaac update can prove the boundary is gone.
+
 Do not copy that USD by itself. It is a reference-heavy stock asset; relative
 mesh/material/payload paths resolve only when the machine's Isaac asset root
 and its directory layout remain intact. For a team asset, use
