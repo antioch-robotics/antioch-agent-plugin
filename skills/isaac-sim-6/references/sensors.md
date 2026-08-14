@@ -42,10 +42,12 @@ module-scope `class MyWriter(Writer)` is a module-scope `omni` import.
 The legacy `isaacsim.sensors.camera.Camera` and `isaacsim.sensors.physics.*`
 classes still load in 6.0, but their implementations moved to the
 `experimental.*` extensions — deprecated; prefer the `experimental.*` stack
-for new code. Antioch blocks construction of the legacy camera because its
-second render product can hang `World.step(render=True)` forever on the stock
-Isaac Sim 6.0.1 image. For a screenshot of the active USD camera, use the
-bounded `antioch.capture_viewport()` helper instead:
+for new code. Antioch does not restrict the legacy camera. It does create a
+second render product, which one field report tied to a `World.step(render=True)`
+call that never returned on the stock Isaac Sim 6.0.1 image — an intermittent
+Isaac failure mode, described with its signature in `sensors-cameras.md`. For a
+screenshot of the active USD camera with no second product, use the bounded
+`antioch.capture_viewport()` helper:
 
 ```python
 def capture_active_view() -> object | None:

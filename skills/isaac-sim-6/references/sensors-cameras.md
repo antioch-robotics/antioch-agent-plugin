@@ -15,11 +15,34 @@ Two layers stack:
    annotators, or applies lens distortion.
 
 The legacy `isaacsim.sensors.camera.Camera` still loads as a full deprecated
-implementation, but Antioch raises `UnsupportedCameraError` before it can
-create a second render product. On the stock 6.0.1 image that product can
-leave `World.step(render=True)` blocked forever. Use the active viewport
-capture for one existing camera view, or migrate to `RtxCamera` plus
-`CameraSensor` for explicit AOVs. Migration details are at the bottom.
+implementation. It works, Antioch does nothing to it, and Antioch has no
+opinion about it. Prefer the `experimental.*` stack for new code because
+NVIDIA deprecated this one, not because the platform restricts it. Migration
+details are at the bottom.
+
+### Failure mode you may hit: a step that never returns
+
+One field report on the stock 6.0.1 image saw `world.step(render=True)` never
+return after the scenario constructed this camera. Know the signature so you
+recognise it instead of assuming your scene is wrong:
+
+- no exception, no timeout, and no log line — the process simply stops making
+  progress;
+- the main thread is parked in `simulation_context.py` inside `step`
+  (a `py-spy dump` shows this);
+- GPU utilisation drops to 0% while one CPU core stays busy;
+- the same scene renders normally with the camera removed.
+
+The suspected cause is a second render product: this camera creates its own,
+beside the one the active viewport already owns. It was reported on stock and
+custom images and with capture both on and off. **It is intermittent** — later
+runs of the same scenes did not reproduce it, so a scene that works once is not
+proof and a stall is not proof that your code is wrong.
+
+If you hit it, `py-spy dump` on the process first, then either drop to the
+active-viewport capture below (which creates no product) or move to `RtxCamera`
+plus `CameraSensor`. Antioch does not detect, bound, or refuse this — it is
+Isaac behaviour, and you debug it as you would any other Isaac behaviour.
 
 ### One active-viewport frame
 

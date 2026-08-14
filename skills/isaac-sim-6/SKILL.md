@@ -297,10 +297,12 @@ carry one convention into the other stack.)
    for certain collision approximations — validate with collision
    visualization. See `references/physics.md`.
 7. Sensors: `play(commit=True)` before `get_data()`; velocities after play.
-   Do not construct `isaacsim.sensors.camera.Camera`: Antioch raises a named
-   `UnsupportedCameraError` before its second render product can hang
-   `World.step(render=True)`. Point the active viewport at a USD camera and
-   use `antioch.capture_viewport()`, or use the experimental RTX camera API.
+   `isaacsim.sensors.camera.Camera` works and Antioch does not restrict it. Its
+   second render product has been tied to an intermittent
+   `World.step(render=True)` that never returns — know the signature in
+   `references/sensors-cameras.md`. For pixels with no second product, point
+   the active viewport at a USD camera and use `antioch.capture_viewport()`, or
+   use the experimental RTX camera API.
 8. `torch` imported before the app/physics settles → CUDA context conflict
    hangs Kit. Defer torch until after boot + settle.
 9. Newton registers when its extension is enabled but activates only on an
