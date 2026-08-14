@@ -36,8 +36,10 @@ same CLI. The differences are:
   `--hosted`/`--port` pair on `jupyter lab`); the webapp opens it — do not
   start it by hand. `antioch jupyter stream` exists specifically to put a
   kernel's Isaac GUI on the Mission Control livestream pane.
-- The webapp's Launch pane (Run live / Run / Queue) and Activity pane are GUI
-  twins of `scenario run`, `--queue`, and the list commands.
+- The webapp's Launch pane (Run live / Run / Queue) and Machines pane are GUI
+  twins of `scenario run`, `--queue`, and the list commands. The Machines pane
+  shows one row per assigned machine and speaks the same status phrases as
+  `antioch machine list`.
 
 ## Provenance: `dispatched_from`
 

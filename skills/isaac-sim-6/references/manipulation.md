@@ -92,12 +92,13 @@ If the count is zero, check the asset root, payload loading, and any
 `*_instanceable.usd` variant before guessing a prim path. A USD that merely
 opens successfully is not evidence that its articulation is composed.
 
-## SO-101 pick-ready composition
+## SO-101 catalog composition — pick not proven
 
 The following is the smallest SO-101 scene that a newcomer should compose for a
-pick demonstration. It uses the tenant catalog, not guessed Isaac asset-root
+pick investigation. It uses the tenant catalog, not guessed Isaac asset-root
 paths. Pin every version: a moving robot revision can change jaw collision
-geometry without changing the Python controller.
+geometry without changing the Python controller. The scene settles, but the
+catalog composition has no passing live pick certificate yet.
 
 | Role | Catalog asset and version | Place it at | Important detail |
 |---|---|---|---|
@@ -123,16 +124,53 @@ tabletop and cube bottom before `World.reset()`.
 This composition is deliberately explicit about the cube-set transform: the
 asset contains three dynamic cubes, and loading the whole set without removing
 the other two creates extra contacts and makes a first run non-diagnostic. The
-catalog layout above is the target scene recipe. A live certificate for the
-catalog workcell composition is still required before treating it as a release
-example; the certificate below is for the same arm/controller geometry on a
-ground-plane table.
+catalog layout above is the scene recipe. Do not describe it as pick-ready until
+the live lift gate below passes on this exact composition.
+
+### Live catalog dispatch — pick failed
+
+The exact catalog assets and transforms above were dispatched on Isaac Sim
+6.0.1 on 2026-08-14. Run
+`f3d9d43ece8d4530a61efdb8f6a06629` in project `SO-101 Pick Proof` loaded and
+settled the scene, then failed the `cube_lifted` check:
+
+| Evidence | Measured value |
+|---|---:|
+| Time from dispatch start to the settled-cube sample | `13.599 s` |
+| Complete `antioch run` duration | `18.332 s` |
+| Settled medium-cube pose | `(0.2199999, -0.1800002, 0.4399999) m` |
+| Cube pose at grasp phase | `(0.2459001, -0.1784823, 0.4400000) m` |
+| Cube pose at lift phase | `(0.2523814, -0.1780725, 0.4400000) m` |
+| Measured lift | `0.00000006 m` |
+| Measured slip | `0.006494 m` |
+
+The arm reached the recorded approach, descend, close, and lift positions, but
+the jaw pushed the cube in +X instead of lifting it. The cube speed was
+`0.000 m/s` at readback because it remained on the tabletop. The check failed;
+the object did not leave the surface.
+
+The composition settled on the first clean catalog inspection. There were 20
+`so101_pick` controller dispatches in this investigation: 18 failed numeric
+checks and 2 errored while correcting the probe and API usage. None lifted the
+cube. The ground-plane certificates below are historical evidence only; they do
+not certify this catalog workcell.
+
+The live articulation exposed the DOFs
+`shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll, gripper` and
+the frame at
+`/World/Robot/Geometry/base_link/shoulder_link/upper_arm_link/lower_arm_link/wrist_link/gripper_link/gripper_frame_link`.
+`Articulation` has no public `prim_paths` attribute, and
+`RigidPrim.get_velocities()` returns a `(linear, angular)` tuple. These API
+details corrected the probe; they did not change the failed physical result.
 
 ### Reach and approach numbers
 
 SO-101 has five positioning DOF. Use `gripper_frame_link` as the end-effector
-frame and a top-down orientation. Keep the object and every transport pose
-inside the measured envelope:
+frame. The numbers below came from a ground-plane controller and are not a
+validated catalog target: the live catalog controller reached the position
+targets but lost its top-down orientation and pushed the cube. Enforcing that
+orientation drove the catalog arm into its joint limits. Recalibrate the pose
+solver against the composed USD before calling this scene a pick.
 
 | Radial distance from arm base | Safe TCP height above tabletop | Measured tracking error |
 |---|---:|---:|
@@ -198,13 +236,15 @@ threshold. Save `grasp_offset_m`, `lift_delta_z_m`, `lift_slip_m`,
 | Cube falls through or the table is near `z=0.036 m` | Workcell `scale` then `translate` order scales the authored 0.400 m Z translation | Translate `/World/Workcell` by `(0, 0, 0.384) m`; assert tabletop `z=0.380..0.420 m`. |
 | Object is in the bin footprint but on its rim | Hard-coded or stale held offset | Measure the offset after lift and after traverse. |
 | Object appears frozen at its spawn pose | Authored-layer readback | Read `RigidPrim.get_world_poses()` after stepping. |
+| Position-only IK reaches the lift point but the cube moves sideways | The catalog arm loses the required top-down orientation | Solve a joint-limited full pose against the live `gripper_frame_link`; the documented position-only recipe is not a pick proof. |
+| Full-pose IK drives shoulder or elbow to a limit | The documented top-down target is not reachable for this catalog USD at the stated mount | Stop and recalibrate the TCP pose, mount, and joint limits before changing the jaw effort. |
 
 ### Existing run certificate
 
 The controller and geometry were run successfully on Isaac Lab 3.0 / Isaac Sim
 6.0.1 with a ground plane at `z=0`, a 30 mm dynamic cube, and the same measured
-SO-101 jaw and top-down phases. These are the evidence runs, not a claim that
-the catalog workcell composition has already been re-dispatched:
+SO-101 jaw and top-down phases. These are historical ground-plane certificates;
+the catalog workcell dispatch above is the current evidence and failed:
 
 | Case | Run ID | Result | Wall time |
 |---|---|---|---:|
@@ -220,11 +260,9 @@ livestream is not part of the manipulation gate.
 An independent core Isaac Sim 6.0.1 probe of the catalog assets confirmed the
 corrected composition before this section was written: the tabletop read
 `z=0.380000..0.419999 m`, and after 120 physics steps the medium cube read
-`(0.2200000, -0.1800001, 0.43999997) m`. The same probe did not complete a
-pick with a hand-written position-only controller; its end-effector started
-in a non-top-down orientation and pushed the cube laterally. Keep the
-top-down pose and jaw approach above as a requirement, not an optional
-controller detail.
+`(0.2200000, -0.1800001, 0.43999997) m`. The live dispatch above then showed
+that settling is not the same as grasping. Treat the top-down pose and jaw
+approach as hypotheses that require the numeric lift gate, not as a guarantee.
 
 The checked-in example tree is currently held by another writer. When it is
 available, add `examples/scenarios/so101_pick.py` under the
