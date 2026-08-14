@@ -55,6 +55,12 @@ two machines bills double, while several processes sharing one machine do not
 multiply. Check usage before and after fan-out or long queued work, and
 release machines the task no longer needs.
 
+Usage is assignment-scoped. One interval covers one assignment, idle time
+included, so many runs can share it and there is no per-run or per-scenario
+cost figure to report. To cost one piece of work, give it its own assignment
+and release the machine when it finishes, then filter usage by that project
+or member.
+
 ## Allocate a machine and start the project
 
 Declare the stack in `antioch.yaml` and start it through the top-level CLI:
