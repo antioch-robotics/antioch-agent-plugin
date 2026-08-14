@@ -1,6 +1,6 @@
 {
   "name": "antioch",
-  "version": "0.2.18",
+  "version": "0.2.19",
   "description": "Adds Antioch simulation engineering to Codex and Claude Code: build scenarios, run evaluations, inspect evidence, and research the simulation stack",
   "author": {
     "name": "Antioch"

@@ -315,7 +315,7 @@ name: Pick and Place
 services:
   sim:
     build: .    # context ".", dockerfile "Dockerfile";
-                # FROM antioch-engine/isaac-sim-6.0.1:0.3.41 selects the engine and SDK
+                # FROM antioch-engine/isaac-sim-6.0.1:0.3.42 selects the engine and SDK
     environment:
       ROS_DOMAIN_ID: "7"
     depends_on:
