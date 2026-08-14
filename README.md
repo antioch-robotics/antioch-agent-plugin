@@ -53,15 +53,15 @@ covers project setup, engine selection, and your first run.
 
 ## Install the plugin
 
-The commands below pin plugin version `v0.2.12`. To install the moving `main`
-branch instead, remove `#v0.2.12` from the Claude Code URL or remove
-`--ref v0.2.12` from the Codex command. A floating install can change without
+The commands below pin plugin version `v0.2.13`. To install the moving `main`
+branch instead, remove `#v0.2.13` from the Claude Code URL or remove
+`--ref v0.2.13` from the Codex command. A floating install can change without
 notice.
 
 ### Claude Code
 
 ```bash
-claude plugin marketplace add antioch-robotics/antioch-agent-plugin.git#v0.2.12
+claude plugin marketplace add antioch-robotics/antioch-agent-plugin.git#v0.2.13
 claude plugin install antioch@antioch
 ```
 
@@ -77,7 +77,7 @@ Claude Code can show a new project MCP server as pending until you approve it.
 ### Codex
 
 ```bash
-codex plugin marketplace add antioch-robotics/antioch-agent-plugin.git --ref v0.2.12
+codex plugin marketplace add antioch-robotics/antioch-agent-plugin.git --ref v0.2.13
 codex plugin add antioch@antioch
 ```
 
