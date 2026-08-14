@@ -161,8 +161,13 @@ run's stdout to stdout and stderr to stderr.
   `{"error": {"type", "message", "exit_code", "http_status", "retryable"}}`
   on **stderr** while stdout stays parseable. `retryable: true` means an
   unchanged retry is sensible. Branch on `type`
-  (`control_plane_unreachable`, `machine_state_conflict`, `aborted`,
-  `usage_error`, …).
+  (`machine_released`, `machine_response_error`, `rome_response_error`,
+  `control_plane_unreachable`, `aborted`, `usage_error`, …).
+- `machine_released` with `http_status: 401` means the assigned machine was
+  released underneath the command — an idle sweep, a park, or a replacement
+  generation. It is not a credential problem and `antioch auth login` does
+  nothing for it. Run the same command again; allocation happens at the start
+  of a command, so the retry gets a new machine.
 - Exit codes: the documented result (0/1), usage errors 2, Ctrl-C 130. A
   declined confirmation prompt exits 1. `antioch run`, `services exec`, and
   one-shot `machine ssh` return the remote command's own exit status.
