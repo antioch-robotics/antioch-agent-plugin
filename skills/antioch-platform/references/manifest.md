@@ -67,7 +67,7 @@ Docker runs underneath Antioch. The 17 supported service keys:
 | Key | Type | Default | When to use |
 |---|---|---|---|
 | `build` | mapping or string shorthand | unset | Build the image on the assigned machine from a Dockerfile. One of `build`/`image` is required. See "Build" below. |
-| `image` | string | unset | Use a registry image directly. For `sim`, use `antioch-sim/<engine>:<sdk-version>`; other services can use any registry image. |
+| `image` | string | unset | Use a registry image directly. For `sim`, use `antioch-engine/<engine>` (add `:<sdk-version>` only to pin one release); other services can use any registry image. |
 | `command` | string (shlex-split) or list | unset; sim gets `["sleep", "infinity"]` injected | Container command override. |
 | `entrypoint` | string (shlex-split) or list | unset | Entrypoint override. |
 | `environment` | map or `NAME=VALUE` list | `{}` | Static service environment. Names match `^[A-Za-z_][A-Za-z0-9_]*$`. A `null` map value is rejected — write an explicit `KEY: ""`; there is no host-environment inheritance. Names starting `ANTIOCH_` are reserved for injected values. Booleans lower to `true`/`false` strings. |
@@ -122,13 +122,14 @@ antioch.yaml". When `sim` is present:
 2. `profiles` is forbidden on it; `sim` is always active.
 3. It cannot declare both `build` and `image` (other services can; the build
    result wins there).
-4. Its `image`, when used, must be a versioned Antioch simulation image:
-   `antioch-sim/<engine>:<sdk-version>`. The engine is `isaac-601-ga` or
-   `isaac-lab-30b2`; the SDK version must use semantic versioning. The removed alias
-   `antioch-sim:<version>` fails.
+4. Its `image`, when used, must be an Antioch simulation image:
+   `antioch-engine/<engine>`. The engine is `isaac-sim-6.0.1` or
+   `isaac-lab-3.0`. Without a tag, runs use the SDK release installed with the
+   CLI; an explicit `:<sdk-version>` tag must use semantic versioning. The
+   removed `antioch-sim` image names fail.
 5. With `build`, exactly one Dockerfile `FROM` line must use a versioned
-   `antioch-sim/<engine>:<sdk-version>` image. That value chooses the cloud
-   engine and SDK. Omitting it fails validation.
+   `antioch-engine/<engine>:<sdk-version>` image. That value chooses the cloud
+   engine and SDK. A `FROM` line without the SDK tag fails validation.
 6. With no `command`, the loader injects `sleep infinity` so the container
    idles for exec-style dispatch.
 7. No other service may use an engine image — "name the engine service
@@ -292,7 +293,7 @@ scenario_paths: ["src"]
 
 services:
   sim:
-    image: "antioch-sim/isaac-601-ga:0.3.35"
+    image: "antioch-engine/isaac-sim-6.0.1"
     watch:
       - action: sync
         path: .
@@ -314,7 +315,7 @@ name: Pick and Place
 services:
   sim:
     build: .    # context ".", dockerfile "Dockerfile";
-                # FROM antioch-sim/isaac-601-ga:0.3.35 selects the engine and SDK
+                # FROM antioch-engine/isaac-sim-6.0.1:0.3.36 selects the engine and SDK
     environment:
       ROS_DOMAIN_ID: "7"
     depends_on:

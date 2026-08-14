@@ -28,7 +28,7 @@ example scenarios, `smoke` and `sweep` suites, `.gitignore`, and
 `.dockerignore`. It does not allocate a
 machine, register anything remotely, or replace existing source files, and it
 refuses a directory that is already inside a project. Pass
-`--engine isaac-601-ga` or `--engine isaac-lab-30b2` to override the engine
+`--engine isaac-sim-6.0.1` or `--engine isaac-lab-3.0` to override the engine
 the installed extra selects. The generated ignore file covers local
 `home/`, `.cache/`, and `outputs/` trees so they do not enter a build context.
 
@@ -51,12 +51,12 @@ is valid — Isaac commands refuse it until a `sim` service is declared. See
 ## Base image inventory
 
 The published engine image is the base for a project Dockerfile. The
-`isaac-601-ga` core starts from Ubuntu 24.04 and includes the Isaac Sim 6.0.1
+`isaac-sim-6.0.1` core starts from Ubuntu 24.04 and includes the Isaac Sim 6.0.1
 runtime, Python 3 with pip, venv, and development headers, `uv`, `git`, and
 `git-lfs`. It also includes the runtime graphics and audio libraries that Kit
 needs: Vulkan and `vulkan-tools`, GL/EGL/GLES/GLVND, X11, and audio support.
 The Isaac Sim layer carries the in-process ROS 2 Jazzy Python stack. The
-`isaac-lab-30b2` layer adds Isaac Lab 3.0.0b2.post1 and its pinned framework
+`isaac-lab-3.0` layer adds Isaac Lab 3.0.0b2.post1 and its pinned framework
 extras.
 
 This is a runtime inventory, not a promise of a general build workstation.
@@ -66,7 +66,7 @@ message-build toolchain, or project-specific system packages. Install those
 in the project Dockerfile when the project needs them. Verify an image that
 you changed with `antioch services exec sim command -v TOOL` before dispatch.
 
-The `FROM antioch-sim/<engine>:<sdk-version>` line is the first Docker image
+The `FROM antioch-engine/<engine>:<sdk-version>` line is the first Docker image
 layer. Changing it rebuilds the engine and every project layer. A changed
 `apt-get` or `uv` instruction rebuilds that instruction and the layers after
 it; a changed source `COPY` rebuilds only the later project layers. Keep
@@ -76,24 +76,20 @@ image by digest.
 
 ## Simulation image and SDK version
 
-`antioch init` writes `antioch-sim/<engine>:<sdk-version>` under
-`services.sim.image`. The engine name selects Isaac Sim or Isaac Lab, and the
-value after the colon selects the Antioch SDK installed in the cloud
-container. Change that image value to upgrade an existing project. Add a
-Dockerfile only for custom dependencies and copy the same value into its
-`FROM` line. Install the public SDK from PyPI with the engine option that
-should select the first image and examples:
+`antioch init` writes `antioch-engine/<engine>` under `services.sim.image`.
+The engine name selects Isaac Sim or Isaac Lab. Without a version tag, cloud
+runs use the Antioch SDK release installed with the CLI, so local code and
+the cloud simulation always match; add `:<sdk-version>` only to hold one
+exact release. Add a Dockerfile only for custom dependencies and use the same
+image with an explicit tag in its `FROM` line. Install the public SDK from
+PyPI with the engine option that should select the first image and examples:
 
 ```bash
-uv add --compile-bytecode "antioch-sim[isaac-601-ga]"
+uv add --compile-bytecode "antioch-sim[isaac-sim]"
 ```
 
 The SDK wheel includes editor types for every supported engine. The engine option does
 not install Isaac locally or limit which types are available.
-
-When the locally installed SDK version differs from the image's SDK version,
-the CLI warns you. The cloud simulation runs against the SDK inside the image.
-Use the same version locally when you want editor feedback to match it exactly.
 
 Do not add an engine selector to `antioch.yaml`; it has none. The built sim
 image identifies the engine that runs in the cloud.
@@ -122,9 +118,9 @@ and `.dockerignore` rules, before they start.
 ## Use private-registry images
 
 An auxiliary service can use an image in your own registry. The `sim`
-service cannot: its `image` must stay a versioned
-`antioch-sim/<engine>:<sdk-version>` image, or its Dockerfile must start
-`FROM` one — see `manifest.md`.
+service cannot: its `image` must stay an `antioch-engine/<engine>` image, or
+its Dockerfile must start `FROM` one with an explicit `:<sdk-version>` tag —
+see `manifest.md`.
 
 ```yaml
 services:

@@ -9,7 +9,7 @@
       "name": "antioch",
       "description": "Build scenarios, run evaluations, inspect evidence, and research the simulation stack with Antioch.",
       "source": "./",
-      "version": "0.2.9"
+      "version": "0.2.10"
     }
   ]
 }

@@ -191,14 +191,15 @@ authenticated local tunnels to host-network ports, not a service-name network.
 Environment names beginning with
 `ANTIOCH_` and labels in `antioch.*` or `com.docker.*` are reserved.
 
-The `sim` image name `antioch-sim/<engine>:<sdk-version>` selects the engine
-(`isaac-601-ga` or `isaac-lab-30b2`) and the Antioch SDK installed in the
-cloud container. Change the version after the colon to upgrade it. The engine
-option used to install the SDK tells `antioch init` which image and examples
-to write first. The public SDK
-wheel includes typing for every supported engine. Add a Dockerfile only for
-custom dependencies and use the selected image in its `FROM` line. The
-platform verifies the engine and SDK version from the image's labels.
+The `sim` image name `antioch-engine/<engine>` selects the engine
+(`isaac-sim-6.0.1` or `isaac-lab-3.0`). Without a `:<sdk-version>` tag, cloud
+runs use the Antioch SDK release installed with the CLI, so local and cloud
+always match; add the tag only to hold one exact release. The engine option
+used to install the SDK tells `antioch init` which image and examples to
+write first. The public SDK wheel includes typing for every supported engine.
+Add a Dockerfile only for custom dependencies and use the selected image with
+an explicit tag in its `FROM` line. The platform verifies the engine and SDK
+version from the image's labels.
 Keep `pxr`, `omni`, `carb`, `isaacsim`, and `isaaclab*`
 imports lazy so local scenario discovery works without a simulator installed.
 

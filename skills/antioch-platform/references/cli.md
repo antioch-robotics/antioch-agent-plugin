@@ -92,7 +92,7 @@ and exit 0. An unknown name gets a "did you mean" suggestion.
 | `project current` | Project selected by the working directory | — | bare object; literal `null` outside any project |
 | `project list` | Locally known projects | — | bare array |
 | `project show` | One local project by name or id; optional `PROJECT` positional | — | bare object |
-| `init` | Scaffold a project locally (no prompts, no remote registration); optional `DIRECTORY` positional; refuses a directory already inside a project | `--engine` (`isaac-601-ga` or `isaac-lab-30b2`; default from the installed extra) | `{project_id, name, engine, path, remote_registered}` |
+| `init` | Scaffold a project locally (no prompts, no remote registration); optional `DIRECTORY` positional; refuses a directory already inside a project | `--engine` (`isaac-sim-6.0.1` or `isaac-lab-3.0`; default from the installed extra) | `{project_id, name, engine, path, remote_registered}` |
 | `auth login` | Device-code sign-in (works over SSH); refused inside Mission Control | — | identity |
 | `auth logout` | Remove the local session, machine capabilities, and SSH keys | — | signed-out state |
 | `auth whoami` | Active user and organization; human output on stdout | — | identity |
