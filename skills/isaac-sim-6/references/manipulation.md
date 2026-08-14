@@ -92,6 +92,147 @@ If the count is zero, check the asset root, payload loading, and any
 `*_instanceable.usd` variant before guessing a prim path. A USD that merely
 opens successfully is not evidence that its articulation is composed.
 
+## SO-101 pick-ready composition
+
+The following is the smallest SO-101 scene that a newcomer should compose for a
+pick demonstration. It uses the tenant catalog, not guessed Isaac asset-root
+paths. Pin every version: a moving robot revision can change jaw collision
+geometry without changing the Python controller.
+
+| Role | Catalog asset and version | Place it at | Important detail |
+|---|---|---|---|
+| Arm | `robots/so101-follower-jawfix@v1` | `/World/Robot` | Jaw collision uses convex decomposition. Do not start with `robots/so101-follower@v2`; its convex-hull jaw makes a roughly 21-degree wedge that clamps or throws objects. |
+| Surface | `hackathon/so101-workcell@1.0.0` | `/World/Workcell`, translate `(0, 0, 0.384) m` | Static box tabletop. The corrected top is `z=0.420 m`; its footprint is `x=+-0.300 m`, `y=+-0.250 m`. |
+| Object | `hackathon/so101-cube-set@1.0.0` | `/World/CubeSet` | Keep only `Cube_Medium` for the first run. It is a 40 mm, 0.0384 kg dynamic box whose local center is `(0, 0, 0.020)`. Disable the small and large distractors before reset. |
+
+The workcell asset has an authored `RobotMount` hint of `(0, -0.180,
+0.420) m`. Use that as the robot root pose. The workcell root translation is
+not optional: the USDA's `scale`-then-`translate` xform order scales its
+0.400 m tabletop translation by the 0.040 m Z scale, so the unshifted tabletop
+is only `z=-0.004..0.036 m` in the composed stage. Translate the workcell root
+by `(0, 0, 0.384) m` and assert its simulated tabletop bounds are
+`z=0.380..0.420 m`. Put the cube-set parent at
+`(0.220, -0.180, 0.420) m`; the medium cube then rests on the tabletop with
+its bottom at `z=0.420 m` and has a 0.220 m reach radius from the arm base.
+Add a shallow, open bin as scene-native box geometry at `(0.115, 0.010,
+0.420) m` (100 mm inside width, 25 mm walls, 6 mm floor). These coordinates
+are the measured ground-plane demo translated to the workcell's arm mount. Do
+not scale any of the catalog assets. Measure the composed bboxes and assert the
+tabletop and cube bottom before `World.reset()`.
+
+This composition is deliberately explicit about the cube-set transform: the
+asset contains three dynamic cubes, and loading the whole set without removing
+the other two creates extra contacts and makes a first run non-diagnostic. The
+catalog layout above is the target scene recipe. A live certificate for the
+catalog workcell composition is still required before treating it as a release
+example; the certificate below is for the same arm/controller geometry on a
+ground-plane table.
+
+### Reach and approach numbers
+
+SO-101 has five positioning DOF. Use `gripper_frame_link` as the end-effector
+frame and a top-down orientation. Keep the object and every transport pose
+inside the measured envelope:
+
+| Radial distance from arm base | Safe TCP height above tabletop | Measured tracking error |
+|---|---:|---:|
+| `0.20 m` | `0.055--0.075 m` | `0.9--1.0 mm` |
+| `0.24 m` | `0.055--0.065 m` | `1.5 mm` |
+| `0.24 m` | `0.075 m` | `about 4 mm` near the wrist limit |
+
+Use `r <= 0.240 m` and `TCP z <= surface_z + 0.075 m` as the first-run
+rule. The fixed fingertip reaches the tabletop at about
+`surface_z + 0.006 m`; do not command below it. For the layout above, use
+`surface_z + 0.070 m` for approach, lift, and traverse and
+`surface_z + 0.010 m` for the grasp. The object center is not the TCP: place
+the TCP 28 mm *inboard* of the object along the radial direction
+(`GRASP_RADIAL_OFFSET = 0.028 m`). Re-measure the object-to-TCP offset after
+the lift and again after the traverse before choosing the release target.
+
+### Gripper and physics settings that settle
+
+- Pre-open the jaw to `q=0.60 rad` (about 54 mm). Above `q ~= 0.95`, the moving
+  jaw clears the object band and a close starts with a downward slam instead of
+  a lateral sweep.
+- Close a flat cube to `q=0.10 rad`. Use `q=0.25 rad` for a round object.
+  Do not use the URDF's `10 N*m` effort limit: it produced about 200 N and
+  launched a 20 g cube. Cap the gripper at `0.30 N*m`, with stiffness `4` and
+  damping `0.3`. Start the arm at stiffness `220` and damping `22`.
+- Keep PhysX as the backend. Use a 120 Hz step, TGS, 32 position iterations,
+  4 velocity iterations, zero rest offset, and a 0.002 m contact offset. Give
+  the jaw and object a friction material with static friction about `1.4`.
+  Apply jaw material and collision edits to de-instanced jaw subtrees before
+  reset; instance proxies are read-only. The full de-instancing and material
+  procedure is in `manipulation-grasping.md`.
+- Let each phase settle before starting the next. Run exactly
+  `approach -> descend -> close -> lift -> traverse -> lower -> release ->
+  let_go -> retreat`. Do not open while lowering or retreat while opening:
+  that drops a moving object on the bin rim.
+
+### Numeric pick gate
+
+Log simulated object and end-effector poses, not authored `XformCache` values.
+The pick is real only when all of these checks pass:
+
+1. During grasp, object center to grasp site is at most `0.020 m`.
+2. During lift, object height rises by at least 80% of the commanded lift and
+   object-to-site slip stays below `0.020 m`.
+3. After release and at least one second of settling, object speed is below
+   `0.010 m/s`, final XY error from the bin center is at most `0.055 m`, and
+   the object center is between the bin floor and rim.
+
+The lift check rejects the common false positive where the jaw merely pushes
+the cube. A 30--40 mm cube that stays on the tabletop cannot reach the lift
+threshold. Save `grasp_offset_m`, `lift_delta_z_m`, `lift_slip_m`,
+`place_error_m`, and `residual_speed_mps` as run metrics.
+
+### Failure symptoms
+
+| Symptom | Likely cause | First correction |
+|---|---|---|
+| Jaw hits the top of the cube | Pre-open `q > 0.95` | Start at `q=0.60`; close laterally. |
+| Object wedges, clamps, or shoots sideways | `robots/so101-follower@v2` convex-hull jaw | Use `robots/so101-follower-jawfix@v1`. |
+| Cube crosses the table or vanishes on close | `10 N*m` jaw effort or aggressive gains | Cap effort at `0.30 N*m`; use the gains above. |
+| IK error grows during transport | Radius above `0.240 m`, high TCP, or pure IK | Stay top-down; use joint-space interpolation for lift/traverse. |
+| Arm reaches but misses the object | TCP treated as object center | Subtract the 28 mm radial offset and verify the grasp frame. |
+| Cube falls through or the table is near `z=0.036 m` | Workcell `scale` then `translate` order scales the authored 0.400 m Z translation | Translate `/World/Workcell` by `(0, 0, 0.384) m`; assert tabletop `z=0.380..0.420 m`. |
+| Object is in the bin footprint but on its rim | Hard-coded or stale held offset | Measure the offset after lift and after traverse. |
+| Object appears frozen at its spawn pose | Authored-layer readback | Read `RigidPrim.get_world_poses()` after stepping. |
+
+### Existing run certificate
+
+The controller and geometry were run successfully on Isaac Lab 3.0 / Isaac Sim
+6.0.1 with a ground plane at `z=0`, a 30 mm dynamic cube, and the same measured
+SO-101 jaw and top-down phases. These are the evidence runs, not a claim that
+the catalog workcell composition has already been re-dispatched:
+
+| Case | Run ID | Result | Wall time |
+|---|---|---|---:|
+| centre | `3c09d9cece45417d8c52f4e4d9c5beb7` | 75.2 mm max cube height; 4.3 mm bin error | 3m 10.284s cold |
+| offset-left | `afd9c07805d04ee083b1be5862715625` | 71.0 mm max height; 9.2 mm bin error | 21.550s warm |
+| offset-right | `bae1100df77843169b41e46051afdf94` | 70.4 mm max height; 6.7 mm bin error | 39.7s warm |
+
+The cold run spent 174 s before `sim.reset()` returned (asset download and
+first shader compilation); the warm run's setup was 1.51 s and motion was
+10.56 s for 13.42 s of simulated time. Reproduce with `--no-stream`; a
+livestream is not part of the manipulation gate.
+
+An independent core Isaac Sim 6.0.1 probe of the catalog assets confirmed the
+corrected composition before this section was written: the tabletop read
+`z=0.380000..0.419999 m`, and after 120 physics steps the medium cube read
+`(0.2200000, -0.1800001, 0.43999997) m`. The same probe did not complete a
+pick with a hand-written position-only controller; its end-effector started
+in a non-top-down orientation and pushed the cube laterally. Keep the
+top-down pose and jaw approach above as a requirement, not an optional
+controller detail.
+
+The checked-in example tree is currently held by another writer. When it is
+available, add `examples/scenarios/so101_pick.py` under the
+`packages/antioch-sim` package. Compose the three catalog assets and bin
+exactly as above. Keep the skill section as the placement and failure-mode
+reference; the example should only encode the controller and numeric gate,
+not a second set of geometry constants.
+
 ## Pick the IK stack
 
 | Stack | Module | Use when |
