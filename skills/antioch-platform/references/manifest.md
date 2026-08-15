@@ -22,8 +22,8 @@ private registries — lives in `environment.md`.
   healthcheck, watch. The error names the field and lists the supported keys.
 - Removed legacy top-level fields fail with a dedicated remedy: `root` is
   derived from the manifest path; `engine` moved to the built sim image's
-  labels; `image` belongs in a Dockerfile; `sync` is owned by `.dockerignore`;
-  `env` belongs on a service's `environment`; a top-level `sim:` section must
+  labels; `image` moves to `services.sim.image` or `services.sim.build`; `sync`
+  moves to per-service `watch` rules; `env` belongs on a service's `environment`; a top-level `sim:` section must
   be declared as `services.sim`.
 - Every schema validation failure renders as
   `invalid '<path>/antioch.yaml': <field.path>: <message>`.
@@ -97,14 +97,15 @@ Each fails with `service field '<key>' is not supported — <message>`:
 | Key | Remedy |
 |---|---|
 | `networks` | User-defined networks are not supported; use `network_mode` for namespace sharing. |
-| `volumes` | Declare durable output under `/workspace/output`; named volumes are not supported. |
+| `volumes` | Use `/workspace/output` for temporary assignment output, then preserve files with an artifact, asset, or `services cp`; named volumes are not supported. |
 | `restart` | Antioch fails loud — fix the service, then redeploy with `antioch services up`. |
 | `deploy` | Deployment settings are not part of the dev subset; redeploy with `antioch services up`. |
 | `scale`, `replicas` | Scaling is not part of the dev subset; run one service declaration. |
 | `gpus`, `init` | Already injected on every service. |
 | `container_name` | Container names are derived from the project and service. |
 | `extends`, `include` | One `antioch.yaml` owns the complete stack. |
-| `secrets`, `configs` | Declare ordinary environment values; secret and config mounts are not supported. |
+| `secrets` | Secret mounts are not supported; do not put credentials in `antioch.yaml`. |
+| `configs` | Use an ordinary environment value or synced file for non-secret configuration; config mounts are not supported. |
 | `develop` | Declare watch rules under `watch:` on the service. |
 
 Any other unknown key fails with the supported-key list.
@@ -233,8 +234,8 @@ How images reach machines:
 - **Interactive:** built directly on the machine, or pulled by the machine
   from the authored registry using your local Docker credential
   (`auths`, `credsStore`, `credHelpers`), sent only with that pull.
-- **Queued:** staging resolves every service on the project's current
-  machine, bakes the project source into the sim image, and pushes
+- **Queued:** staging resolves every service on the project's checked-out
+  machine, its sole assignment, or a new assignment, bakes the project source into the sim image, and pushes
   copies identified by exact image digests into your organization's registry.
   Queued environments require `ref@sha256:<digest>` images; a mutable tag or local-only image
   cannot be queued.

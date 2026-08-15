@@ -48,9 +48,11 @@ antioch suite run acceptance --queue --json
 antioch suite show SUITE_RUN_ID --follow --json
 ```
 
-For a queued suite, the submitter builds the selected project services **on the
-project's current machine**. Use `machine checkout` when you need to select one
-of several assigned machines. Antioch adds the current project files to the simulation image,
+For a queued suite, the submitter builds the selected project services on the
+project's checked-out machine, its sole assignment, or a new assignment, in
+that order. Queued dispatch does not accept `--machine`; use `machine checkout`
+when you need to select one of several assigned machines. Antioch adds the
+current project files to the simulation image,
 pulls private images with the local Docker credential, and pushes the resolved
 images into your organization's private registry. Antioch distributes the
 suite's scenario runs

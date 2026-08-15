@@ -86,9 +86,10 @@ Add `--queue` to a scenario selection to submit it headlessly:
 antioch scenario run --scenario bin_pick --queue --json
 ```
 
-The submitter builds or finds every selected service **on the project's current
-machine**. Use `machine checkout` when you need to select one of several assigned
-machines. Antioch adds the current project files to the simulation image, saves
+The submitter builds or finds every selected service on the project's checked-out
+machine, its sole assignment, or a new assignment, in that order. Queued dispatch
+does not accept `--machine`; use `machine checkout` when you need to select one
+of several assigned machines. Antioch adds the current project files to the simulation image, saves
 the exact images and run inputs, and then distributes the work across other
 eligible machines. Development `watch` rules and `ports` connections are not
 included in queued runs.

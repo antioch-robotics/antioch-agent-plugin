@@ -10,8 +10,8 @@ validation question.
 
 ## Start in a project
 
-The project manifest is `antioch.yaml`. From the directory that contains it,
-check the packaged CLI before setup or dispatch:
+Create a new project from its parent directory, not from inside another
+directory that already contains `antioch.yaml`:
 
 ```bash
 antioch --version
@@ -22,20 +22,23 @@ Run these commands with the project's Python environment active. In a uv
 project whose environment is not active, prefix a command with `uv run`.
 
 `init` is local and non-interactive. It reads the engine option declared in
-the Python dependency and the installed SDK version, then creates a manifest
-with the matching versioned simulation image, a simulation script,
+the Python dependency, then creates a manifest with that engine image without
+a version tag, a simulation script,
 example scenarios, `smoke` and `sweep` suites, `.gitignore`, and
-`.dockerignore`. It does not allocate a
-machine, register anything remotely, or replace existing source files, and it
-refuses a directory that is already inside a project. Pass
+`.dockerignore`. At run time, the untagged image uses the SDK release installed
+with the CLI. It does not allocate a
+machine, register anything remotely, or replace existing source files. It
+refuses a target that is already inside a project. Pass
 `--engine isaac-sim-6.0.1` or `--engine isaac-lab-3.0` to override the engine
 the installed extra selects. The generated ignore file covers local
 `home/`, `.cache/`, and `outputs/` trees so they do not enter a build context.
 
-Inspect project identity afterwards — useful when several checkouts exist or
-a command acts on the wrong project:
+Then move into the directory that contains `antioch.yaml` and inspect project
+identity — useful when several checkouts exist or a command acts on the wrong
+project:
 
 ```bash
+cd warehouse-amr
 antioch project current --json
 antioch project list --json
 ```
@@ -88,8 +91,9 @@ PyPI with the engine option that should select the first image and examples:
 uv add --compile-bytecode "antioch-sim[isaac-sim]"
 ```
 
-The SDK wheel includes editor types for every supported engine. The engine option does
-not install Isaac locally or limit which types are available.
+The `isaac-sim` extra installs Isaac Sim editor stubs. The `isaac-lab` extra
+installs both Isaac Lab and Isaac Sim stubs because Lab builds on Sim. Neither
+extra installs Isaac locally.
 
 Do not add an engine selector to `antioch.yaml`; it has none. The built sim
 image identifies the engine that runs in the cloud.

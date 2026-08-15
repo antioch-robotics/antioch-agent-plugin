@@ -1,6 +1,6 @@
 ---
 name: antioch-research
-description: The retrieval hub for the entire simulation substrate. Fires for ANY question, implementation, review, or debugging that touches Isaac Sim, Isaac Lab, Omniverse/Kit, OpenUSD, PhysX, Newton, Warp, cuRobo, skrl, rsl-rl, Cosmos, NuRec, Isaac ROS, or Rerun — the research_* MCP tools are the canonical lookup verb for those surfaces and beat memory, upstream websites, and every other skill at API detail. One research_search spans all 21 indexed corpora, including pinned source for Isaac Sim, Isaac Lab, rsl-rl, Warp, and cuRobo. Load this before writing, porting, reviewing, or debugging any code on those stacks; whenever an API signature, parameter semantics, default, error string, or source behavior is in question; and when grounding or verifying any claim about them. Teaches the search, expand, and open loop, detailed-query style, kind='source' code localization, and grep for exact symbols. Not for Antioch platform or CLI questions (antioch-platform) or vendors outside the index (web research).
+description: The retrieval hub for the simulation substrate. Use for any question, implementation, review, or debugging task involving Isaac Sim, Isaac Lab, Omniverse/Kit, OpenUSD, PhysX, Newton, Warp, cuRobo, skrl, rsl-rl, Gymnasium, rl-games, Cosmos, NuRec, Isaac ROS, or Rerun. The research_* MCP tools are the canonical source for API details and should precede memory, upstream websites, and other skills. One research_search spans every active corpus, with pinned source for Isaac Sim, Isaac Lab, rsl-rl, Warp, cuRobo, Gymnasium, and rl-games. Load before writing, porting, reviewing, or debugging code on these stacks, or verifying a signature, parameter, default, error, or source behavior. Use search and expand for concepts, kind='source' for code, and grep/open for exact symbols. Not for Antioch CLI or platform questions (antioch-platform) or unindexed vendors (web research).
 ---
 
 # Antioch Research
@@ -288,8 +288,8 @@ their citations, is the intended use.
   guess is a burned turn.
 * **Short queries.** Spend the ten extra seconds writing a detailed query
   — it pays back in retrieval quality.
-* **Corpus-filtering the first pass.** The default diversifies across all
-  19 corpora; drill in only after a broad search told you where the answer
+* **Corpus-filtering the first pass.** The default diversifies across every
+  active indexed corpus; drill in only after a broad search told you where the answer
   lives.
 * **`research_open` as a first move.** Search first; open only the
   artifact a card pointed at. Opening whole files speculatively floods the

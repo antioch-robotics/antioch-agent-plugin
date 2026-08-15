@@ -63,8 +63,9 @@ antioch services up --watch
 antioch jupyter lab --no-open --verbose
 ```
 
-The foreground watcher owns project publication; JupyterLab does not copy
-project files itself. Ctrl-C ends `services up --watch` but leaves the containers and
+`antioch jupyter lab` prepares `sim` and applies one sync before it opens. Keep
+`antioch services up --watch` running only when later local edits should continue
+reaching the container. Ctrl-C ends `services up --watch` but leaves the containers and
 declared ports running, so use `antioch services down` when the stack should stop. Closing
 the notebook or stopping Lab leaves the kernel warm until it is stopped or
 culled.
@@ -74,6 +75,7 @@ culled.
 The `antioch services ssh` command opens a PTY in `sim` by default — when the
 stack has no sim service, name the service explicitly. It resolves an existing
 assignment but does not create a recorded run or retain results. Use
-`antioch services exec sim python` for scripts that need a faithful exit
-status; use `antioch machine ssh` for a VM-shell diagnostic. See
+`antioch services exec` for a finite diagnostic command; it has a 120-second
+ceiling, so use `antioch run --timeout SECONDS` for longer simulation code.
+Use `antioch machine ssh` for a VM-shell diagnostic. See
 `machines.md` for direct transfer and service selection.

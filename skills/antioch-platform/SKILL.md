@@ -4,7 +4,7 @@ description: >
   The entry point for any work with Antioch, the simulation platform for
   physical AI. Teaches projects, services, assigned
   GPU machines, scenarios, suites, assets, organizations, supported engines,
-  Mission Control workspaces, and
+  Mission Control, and
   the CLI workflows that connect them — and routes the sibling Antioch skills.
   Load this first whenever a repository contains antioch.yaml, when the user
   mentions Antioch, before running an antioch command, and whenever a task needs
@@ -49,7 +49,7 @@ Choose deliberately and be able to state the rule:
 | `antioch run FILE` vs `scenario run` | `run` when the output and exit status are the whole story (a probe). A scenario when results, checks, logs, or artifacts must be retained — history is the product. |
 | interactive vs `--queue` | Use interactive execution while an engineer or agent is attached and wants fast feedback or a livestream. Interactive scenarios and suites can fan out with `--machines`. Use `--queue` when work should outlive the terminal, run from CI or a schedule, or execute unattended with its service images and project files saved. |
 | stream vs headless | Interactive dispatch streams by default. Use `--no-stream` when the GUI is unnecessary; queued work is always headless. |
-| hold vs release | Keep the machine while iterating (allocation is the slow step). `machine release` when you switch projects or stop for hours; queued work needs no held machine. |
+| hold vs release | Keep the machine while iterating (allocation is the slow step). `machine release` when you switch projects or stop for hours. Queue submission prepares images on the checked-out machine, the project's sole assignment, or a new assignment, in that order; queued dispatch does not accept `--machine`, and the queued run no longer needs that machine after submission. |
 | dispatch vs preview | When selection is in doubt, use `antioch scenario collect --json` and `antioch suite collect --json` to preview exactly what would run. |
 
 ## When something fails, ask the platform first
@@ -196,7 +196,9 @@ The `sim` image name `antioch-engine/<engine>` selects the engine
 runs use the Antioch SDK release installed with the CLI, so local and cloud
 always match; add the tag only to hold one exact release. The engine option
 used to install the SDK tells `antioch init` which image and examples to
-write first. The public SDK wheel includes typing for every supported engine.
+write first. The `isaac-sim` extra installs Isaac Sim editor stubs. The
+`isaac-lab` extra installs Isaac Lab and Isaac Sim stubs because Lab builds on
+Sim. Neither extra installs Isaac locally.
 Add a Dockerfile only for custom dependencies and use the selected image with
 an explicit tag in its `FROM` line. The platform verifies the engine and SDK
 version from the image's labels.
@@ -211,12 +213,12 @@ imports lazy so local scenario discovery works without a simulator installed.
 - **Scenario** — a decorated Python function selected locally and executed as
   a recorded simulation run.
 - **Suite** — an ordered union of selector clauses saved in `antioch.yaml`.
-- **Asset** — an immutable file revision shared with the organization.
+- **Asset** — an immutable file version shared with the organization.
 - **Organization** — the visibility boundary for scenario history, suite
   history, assets, and usage. Machine assignments remain personal.
-- **Mission Control workspace** — the hosted authoring environment in the webapp:
-  one ephemeral per-user environment with the CLI signed in, examples, hosted
-  JupyterLab, and an agent terminal (`references/mission-control.md`).
+- **Mission Control** — a hosted, ephemeral authoring environment in the webapp
+  with the CLI signed in, examples, JupyterLab, and an agent terminal
+  (`references/mission-control.md`).
 
 ## The useful loops
 

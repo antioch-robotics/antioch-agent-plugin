@@ -70,7 +70,7 @@ and its directory layout remain intact. For a team asset, use
 `antioch.load_asset(name, prim_path="/World/Robot", version=...)` instead (the
 catalog flow is covered by `antioch-platform`'s assets reference).
 
-Some asset revisions open with no default prim or no descendants, including
+Some asset versions open with no default prim or no descendants, including
 reports against a Franka file. Prove what the composed file contains before
 building IK around a path:
 
@@ -148,7 +148,7 @@ described as a success.
 
 The following is the smallest SO-101 scene that a newcomer should compose for a
 pick investigation. It uses the tenant catalog, not guessed Isaac asset-root
-paths. Pin every version: a moving robot revision can change jaw collision
+paths. Pin every version: a moving robot version can change jaw collision
 geometry without changing the Python controller. The scene settles, but the
 catalog composition has no passing live pick certificate yet.
 

@@ -15,9 +15,9 @@ the implementation.
 - **Build in your project.** Inspect `antioch.yaml`, work with your existing
   services and source, and author simulations without cloning the project onto
   a remote VM.
-- **Research the simulation stack.** Search versioned documentation and pinned
-  source for Isaac Sim, Isaac Lab, Omniverse and Kit, OpenUSD, PhysX, Newton,
-  Warp, and other supported libraries through Antioch Research.
+- **Research the simulation stack.** Search versioned documentation across
+  Isaac Sim, Isaac Lab, Omniverse and Kit, OpenUSD, PhysX, Newton, Warp, and
+  other supported libraries, plus pinned source where available.
 - **Run and evaluate simulations.** Start interactive work, use Jupyter, run
   scenarios and suites, and fan evaluations across several Antioch machines.
 - **Reason from evidence.** Inspect outcomes, checks, logs, telemetry,
@@ -53,15 +53,15 @@ covers project setup, engine selection, and your first run.
 
 ## Install the plugin
 
-The commands below pin plugin version `v0.2.28`. To install the moving `main`
-branch instead, remove `#v0.2.28` from the Claude Code URL or remove
-`--ref v0.2.28` from the Codex command. A floating install can change without
+The commands below pin plugin version `v0.2.29`. To install the moving `main`
+branch instead, remove `#v0.2.29` from the Claude Code URL or remove
+`--ref v0.2.29` from the Codex command. A floating install can change without
 notice.
 
 ### Claude Code
 
 ```bash
-claude plugin marketplace add antioch-robotics/antioch-agent-plugin#v0.2.28
+claude plugin marketplace add antioch-robotics/antioch-agent-plugin#v0.2.29
 claude plugin install antioch@antioch
 ```
 
@@ -77,7 +77,7 @@ Claude Code can show a new project MCP server as pending until you approve it.
 ### Codex
 
 ```bash
-codex plugin marketplace add antioch-robotics/antioch-agent-plugin --ref v0.2.28
+codex plugin marketplace add antioch-robotics/antioch-agent-plugin --ref v0.2.29
 codex plugin add antioch@antioch
 ```
 

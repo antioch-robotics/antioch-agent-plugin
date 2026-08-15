@@ -28,7 +28,7 @@ dispatch type, phase, and outcome.
 - Provenance filters: `--suite-run-id ID` (one invocation's members),
   `--invocation-id ID` (everything one queued submission created — queued
   `--json` output carries the id), `--dispatched-from HOST` (a hostname, or
-  `'Mission Control'` for workspace dispatches), and `--no-suite`
+  `'Mission Control'` for runs started there), and `--no-suite`
   (standalone runs only).
 - `--param` / `--result` filter on scenario params and reported metrics. The grammar is `key:op:value`, repeatable — every predicate must match:
   - `=` typed equality for scalars (`--param 'seed:=:42'`), containment on array/object values

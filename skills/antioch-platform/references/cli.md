@@ -14,7 +14,7 @@ Top-level commands, in help order: `run`, `jupyter`, `scenario`, `suite`,
 `machine`, `services`, `assets`, `project`, `auth`, `init`. There is no
 `workspace`, `session`, `queue`, or top-level `exec` group — queueing is the
 `--queue` flag on scenario and suite runs, exec lives at `services exec` and
-`machine ssh`, and Mission Control workspaces have no CLI verbs (see
+`machine ssh`, and Mission Control has no CLI verbs (see
 `mission-control.md`). Bare `antioch` and any bare group print help on stdout
 and exit 0. An unknown name gets a "did you mean" suggestion.
 
@@ -24,7 +24,7 @@ and exit 0. An unknown name gets a "did you mean" suggestion.
 |---|---|---|---|
 | `run FILE [ARGS]...` | Run one project-local `.py` file on a machine; output relays directly | `--machine`, `--stream/--no-stream`, `--restart`, `--timeout` (900 s), `--verbose` | none — the program owns stdout; exit code is the remote process's |
 | `scenario run` | Select and run authored scenarios (flag-based; no positional name) | `--scenario`, `-t/--tag`, `--exclude-tag`, `--path`, `--case`, `--set`, `--machine` (repeatable), `--machines`, `--timeout`, `--stream/--no-stream`, `--restart`, `--verbose`, `--raw-logs`, `--queue` | `--json` requires `--queue`; bare array of queued run records |
-| `suite run NAME` | Run one authored suite | same dispatch options as `scenario run` | `--json` requires `--queue`; bare queued suite object |
+| `suite run NAME` | Run one authored suite | the same machine, timeout, stream, restart, output, and queue controls as `scenario run`; no ad hoc scenario selectors | `--json` requires `--queue`; bare queued suite object |
 
 ### Scenario history
 
@@ -73,7 +73,7 @@ and exit 0. An unknown name gets a "did you mean" suggestion.
 | `services logs` | Stream raw container bytes; optional `SERVICE` positional | `-f/--follow`, `--tail`, `--since` | none — raw stream |
 | `services restart` | Restart in dependency order, no rebuild | `--service` (repeatable) | restarted services |
 | `services build` | Build without starting | `--service` (repeatable) | build results |
-| `services exec SERVICE CMD...` | Run CMD in a service; unknown options pass through to CMD; exit code is the command's | — (no options of its own) | none |
+| `services exec SERVICE CMD...` | Run one finite diagnostic command in a service; unknown options pass through to CMD; exit code is the command's; use `antioch run --timeout SECONDS` for longer simulation code | — (no options of its own) | none |
 | `services ssh` | Interactive PTY in a service; optional `SERVICE` positional, default `sim` when present | — | none |
 | `services cp SRC DST` | Copy files/directories; exactly one side is `SERVICE:PATH`; a destination ending in `/` is a directory and receives the source basename, while a destination without `/` receives the source contents; symlinks copied as links | — | manifest with `direction`, `size_bytes`, `sha256` |
 | `services images` | List retained build products (bare group invocation) | — | build products |
@@ -96,7 +96,7 @@ and exit 0. An unknown name gets a "did you mean" suggestion.
 | `auth login` | Device-code sign-in (works over SSH); refused inside Mission Control | — | identity |
 | `auth logout` | Remove the local session, machine capabilities, and SSH keys | — | signed-out state |
 | `auth whoami` | Active user and organization; human output on stdout | — | identity |
-| `auth switch` | **Interactive only**: numbered organization prompt; no JSON, no flags | — | none |
+| `auth switch` | Select another organization with a prompt, or choose one directly for automation | `--org ORG`; `--json` requires `--org` | identity with `--json` |
 
 ### Jupyter
 
@@ -121,7 +121,7 @@ kernels are live. JSON outputs are bare objects.
 | `ANTIOCH_ENV` | Deployment profile: `preview` (default) or `prod`. `staging` is an alias for preview. Set it before `auth login` and keep it set — credentials are stored per environment. |
 | `ANTIOCH_CONFIG_DIR` | Exact config-directory override. Isolates credentials and allocations per agent or test run without touching the user's store. |
 | `XDG_CONFIG_HOME` | Config root when no override; default `~/.config`. |
-| `ANTIOCH_WORKSPACE_ID` | Set by Mission Control inside a workspace; switches the dispatch origin to `cloud-workspace`. Not user-set. |
+| `ANTIOCH_WORKSPACE_ID` | Internal marker set by Mission Control; switches the dispatch origin to `cloud-workspace`. Never set it yourself. |
 | `ANTIOCH_ENGINE`, `ANTIOCH_SCENARIO_*` | Injected into containers and dispatched processes by Antioch. Never set these. |
 
 ## Credential store
@@ -184,7 +184,10 @@ must always pass `--yes` and confirm scope with the user first.
 
 ## TTY traps
 
-- `auth switch` — interactive numbered prompt; no flags. Hand it to the user.
+- `auth switch` without `--org` — interactive numbered prompt. Use
+  `antioch auth switch --org ORG --json` when an agent already knows the
+  organization id. `--org` matches the exact id only; a display name is
+  refused with the available `name (id)` pairs.
 - Delete confirmations without `--yes` — abort in a pipe.
 - `services up --watch` and `jupyter lab` — resident until Ctrl-C; run them
   where a foreground process is acceptable.
