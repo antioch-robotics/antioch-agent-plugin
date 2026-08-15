@@ -92,6 +92,54 @@ If the count is zero, check the asset root, payload loading, and any
 `*_instanceable.usd` variant before guessing a prim path. A USD that merely
 opens successfully is not evidence that its articulation is composed.
 
+## SO-101 pick and place — the composition that passes
+
+Start here. A closed-loop pick and place is proven on Isaac Lab 3.0 and ships
+with the repository as `so101_pick_place`, in the `isaac-lab` example project:
+
+```bash
+antioch suite run so101-pick-place                     # the nominal case
+antioch suite run so101-pick-place-envelope            # 18 conditions
+```
+
+It pairs the `robots/so101-follower-jawfix@v1` arm with a **native 30 mm,
+20 g cuboid on a ground plane**. It deliberately does not use the 40 mm
+catalog cube or the workcell — that pairing is the next section, and it has
+never passed a live lift.
+
+The controller is a feedback policy, not a replayed joint trajectory: it reads
+the object **position** every step, corrects the task-space goal during lift
+and transport, and uses two measured joint seeds to select reachable kinematic
+branches. It does not read object orientation — the end-effector orientation is
+fixed from the initial radial angle — so this is position feedback, not pose
+feedback. The phase schedule is fixed; nothing here is learned.
+
+Measured envelope, suite run `4351ff2ec6d8453bb28dc8a3abdbeb89`: 15 of 18
+cases passed every check, in 2m 19s across 8 machines.
+
+**All 18 cases ended with the object inside the bin.** The three that did not
+pass tripped secondary gates, and the recorded values say exactly which:
+
+| Case | Lift | Displacement | In bin | Check it failed | Measured / limit |
+|---|---:|---:|:--:|---|---:|
+| `yaw-45` | 0.276 m | 0.205 m | yes | grasp gate, containment | 0.0235 / 0.020 m, 0.291 / 0.25 m |
+| `scale-40mm` | 0.261 m | 0.219 m | yes | grasp gate, containment | 0.0232 / 0.020 m, 0.281 / 0.25 m |
+| `friction-2p0` | 0.161 m | 0.230 m | yes | place tolerance | 0.035132 / 0.035 m |
+
+Do not read a cause into these. Two of the three lifted, carried, and placed
+the object, then failed a gate rather than the task; `friction-2p0` missed the
+place tolerance by 132 micrometres. Two gates are known to be imprecise and
+are not yet corrected: the grasp check compares the absolute object-to-gripper
+distance with a fixed 20 mm instead of comparing it with the offset measured
+at closure, so a larger object fails it without the grasp ever changing; and
+it samples once after traverse rather than across the carry, so it cannot see
+a transient loss. Treat both as measurement limits, not as robot behaviour,
+until a controlled experiment says otherwise.
+
+Copy this scenario before composing your own. Eight checks with measured
+tolerances decide the outcome, so a miss is recorded as a failure rather than
+described as a success.
+
 ## SO-101 catalog composition — pick not proven
 
 The following is the smallest SO-101 scene that a newcomer should compose for a
