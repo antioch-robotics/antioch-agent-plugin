@@ -59,7 +59,7 @@ and exit 0. An unknown name gets a "did you mean" suggestion.
 | `machine list` | Your assignments (personal, never another user's) | `--project`, `--all` | bare array of rows: id, urls, GPU, placement, state, generation, project, `dispatched_from`, `current` |
 | `machine status` | One machine plus live process, stream, and container state | `--project`, `--machine` | bare object |
 | `machine checkout` | Set the project's current machine (git-checkout analogy); local, allocates nothing; optional `MACHINE` positional | `--none` clears | mutation result; bare invocation prints the current machine id on stdout |
-| `machine release` | Release one assignment and stop its work; **idempotent** — already-released is success; optional `MACHINE` positional | `--project`, `--machine` | released assignment |
+| `machine release` | Release one assignment and stop its work; **idempotent** — already-released is success; optional `MACHINE` positional. Asks first when the machine is running work, naming what it stops | `--project`, `--machine`, `--yes` | released assignment |
 | `machine ssh [CMD]...` | VM host shell; a one-shot CMD runs without a PTY, exit status is the command's | `--machine` | none — interactive/relayed |
 | `machine usage` | Measured GPU machine time over a window | `--since` (default `7d`), `--until`, `--project`, `--user`/`--mine`, `--limit` (1–500, 20) | usage summary |
 
@@ -218,7 +218,9 @@ Reach for these without being asked:
   do not.
 - **Check out a machine once** (`machine checkout`) instead of repeating
   `--machine`; the bare invocation prints the current id for scripts.
-- **Release in teardown scripts freely** — `machine release` is idempotent.
+- **Release in teardown scripts with `--yes`** — `machine release` is idempotent,
+  but it asks before stopping work that is still running, and a script has no
+  terminal to answer with.
 - **Verify transfers from the manifest.** `services cp --json` and
   `scenario download --json` carry `sha256` for files and whole directories.
 - **Iterate on a warm kernel.** `jupyter cell` keeps the kernel (and loaded

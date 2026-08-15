@@ -22,8 +22,10 @@ the local choice and
 returns to the sole-assignment rule; a bare `antioch machine checkout` prints
 the current machine id on stdout for scripts. `machine release --machine
 MACHINE --json` stops assigned work and returns that VM to the pool; confirm
-the target before running it. Release is idempotent — an already-released
-machine reports success — so it is safe in teardown scripts. Queue-driven
+the target before running it. A machine that is running work is not released
+until you accept what stops: the command names that work and asks, and `--yes`
+answers it for a script. Release is idempotent — an already-released machine
+reports success — so `machine release --yes` is safe in teardown scripts. Queue-driven
 assignments are refused with the platform's own message.
 
 The text and JSON forms of `machine status` include the machine's direct `url`
