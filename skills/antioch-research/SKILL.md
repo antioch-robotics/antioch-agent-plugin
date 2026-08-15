@@ -1,6 +1,6 @@
 ---
 name: antioch-research
-description: The retrieval hub for the entire simulation substrate. Fires for ANY question, implementation, review, or debugging that touches Isaac Sim, Isaac Lab, Omniverse/Kit, OpenUSD, PhysX, Newton, Warp, cuRobo, skrl, rsl-rl, Cosmos, NuRec, Isaac ROS, or Rerun — the research_* MCP tools are the canonical lookup verb for those surfaces and beat memory, upstream websites, and every other skill at API detail. One research_search spans all 19 indexed corpora, including pinned source for Isaac Sim, Isaac Lab, rsl-rl, Warp, and cuRobo. Load this before writing, porting, reviewing, or debugging any code on those stacks; whenever an API signature, parameter semantics, default, error string, or source behavior is in question; and when grounding or verifying any claim about them. Teaches the search, expand, and open loop, detailed-query style, kind='source' code localization, and grep for exact symbols. Not for Antioch platform or CLI questions (antioch-platform) or vendors outside the index (web research).
+description: The retrieval hub for the entire simulation substrate. Fires for ANY question, implementation, review, or debugging that touches Isaac Sim, Isaac Lab, Omniverse/Kit, OpenUSD, PhysX, Newton, Warp, cuRobo, skrl, rsl-rl, Cosmos, NuRec, Isaac ROS, or Rerun — the research_* MCP tools are the canonical lookup verb for those surfaces and beat memory, upstream websites, and every other skill at API detail. One research_search spans all 21 indexed corpora, including pinned source for Isaac Sim, Isaac Lab, rsl-rl, Warp, and cuRobo. Load this before writing, porting, reviewing, or debugging any code on those stacks; whenever an API signature, parameter semantics, default, error string, or source behavior is in question; and when grounding or verifying any claim about them. Teaches the search, expand, and open loop, detailed-query style, kind='source' code localization, and grep for exact symbols. Not for Antioch platform or CLI questions (antioch-platform) or vendors outside the index (web research).
 ---
 
 # Antioch Research
@@ -44,14 +44,14 @@ turn.
 
 ## One search, all corpora
 
-**The default `research_search` spans ALL 19 indexed corpora simultaneously**,
+**The default `research_search` spans ALL 21 indexed corpora simultaneously**,
 and its ranking diversifies across corpora so the right vendor surfaces on
 its own. Corpus filters (`corpus=`) are optional drill-ins for a second,
 narrower pass — they are never required, and filtering the first pass is an
 anti-pattern. `kind='source'` / `kind='docs'` are the only first-pass
 filters worth setting, and only when the intent is clearly one or the other.
 
-## Corpora indexed (19)
+## Corpora indexed (21)
 
 | Corpus | Version | Covers |
 |---|---|---|
@@ -74,6 +74,8 @@ filters worth setting, and only when the intent is clearly one or the other.
 | `curobo-docs` | dated crawl | NVIDIA cuRobo motion planning |
 | `curobo-source` | v0.8.0 | NVIDIA cuRobo Python source |
 | `rsl-rl-source` | v5.0.1 | rsl-rl-lib source at Isaac Lab 3.0.0-beta2's exact pin — its default RL training library |
+| `gymnasium-source` | v1.2.1 | Gymnasium source at Isaac Lab's exact pin — env API, vector envs, autoreset semantics (CHANGED in 1.0) |
+| `rl-games-source` | python3.11 | rl_games at the isaac-sim fork Isaac Lab pins — the library behind its 37 rl_games tasks |
 
 `deprecated/`, `legacy/`, and archived-version doc trees are excluded at
 ingest, so a superseded page cannot outrank its current one. Two things

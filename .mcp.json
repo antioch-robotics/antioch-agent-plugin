@@ -2,10 +2,7 @@
   "mcpServers": {
     "antioch-research": {
       "command": "antioch-research-mcp",
-      "args": [],
-      "env": {
-        "ANTIOCH_ENV": "staging"
-      }
+      "args": []
     }
   }
 }
