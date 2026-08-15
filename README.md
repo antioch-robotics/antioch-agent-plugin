@@ -48,20 +48,20 @@ antioch auth whoami
 If your project already installs `antioch-sim`, activate its virtual
 environment before you start the agent and skip the global tool installation.
 A project that authors simulations must also select one supported engine extra.
-The [Antioch SDK guide](https://console.poc.antioch.com/docs/quickstart/install-the-sdk)
+The [Antioch SDK guide](https://console.preview.antioch.com/docs/quickstart/install-the-sdk)
 covers project setup, engine selection, and your first run.
 
 ## Install the plugin
 
-The commands below pin plugin version `v0.2.27`. To install the moving `main`
-branch instead, remove `#v0.2.27` from the Claude Code URL or remove
-`--ref v0.2.27` from the Codex command. A floating install can change without
+The commands below pin plugin version `v0.2.28`. To install the moving `main`
+branch instead, remove `#v0.2.28` from the Claude Code URL or remove
+`--ref v0.2.28` from the Codex command. A floating install can change without
 notice.
 
 ### Claude Code
 
 ```bash
-claude plugin marketplace add antioch-robotics/antioch-agent-plugin#v0.2.27
+claude plugin marketplace add antioch-robotics/antioch-agent-plugin#v0.2.28
 claude plugin install antioch@antioch
 ```
 
@@ -77,7 +77,7 @@ Claude Code can show a new project MCP server as pending until you approve it.
 ### Codex
 
 ```bash
-codex plugin marketplace add antioch-robotics/antioch-agent-plugin --ref v0.2.27
+codex plugin marketplace add antioch-robotics/antioch-agent-plugin --ref v0.2.28
 codex plugin add antioch@antioch
 ```
 
@@ -142,7 +142,7 @@ CLI as you. Simulation traffic does not pass through the research connection:
 the CLI connects directly to your Antioch machine, while the research server
 only queries Antioch's documentation and source index.
 
-Review the [complete agent guide](https://console.poc.antioch.com/docs/agents/work-with-agents)
+Review the [complete agent guide](https://console.preview.antioch.com/docs/agents/work-with-agents)
 for project setup, example workflows, and guidance for reviewing autonomous
 simulation work.
 

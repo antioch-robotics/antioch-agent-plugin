@@ -251,7 +251,7 @@ Claude Code and Codex load the MCP from the plugin manifest automatically. For
 a harness that does not load the manifest, register the SDK executable:
 
 ```
-codex mcp add antioch-research --env ANTIOCH_ENV=staging -- antioch-research-mcp
+codex mcp add antioch-research -- antioch-research-mcp
 ```
 
 The first research call prompts for approval; a non-interactive (stdin-null)
