@@ -47,6 +47,38 @@ foreground, and Ctrl-C leaves containers running until `antioch services
 down`. Queued runs use their saved service images, project files, and inputs
 without development watch rules.
 
+## Run the Nova Carter warehouse stack
+
+The documented warehouse launch file is absent from the installed
+`carter_navigation` package share directory on Jazzy. The package does ship
+the warehouse map and the Nav2 parameter file, so start Nav2 directly after
+you build and source the workspace:
+
+```bash
+antioch services exec ros bash -lc 'source /opt/ros/jazzy/setup.bash && source /workspace/project/ros_ws/install/setup.bash && ros2 launch nav2_bringup bringup_launch.py map:=/workspace/project/ros_ws/install/carter_navigation/share/carter_navigation/maps/carter_warehouse_navigation.yaml params_file:=/workspace/project/ros_ws/install/carter_navigation/share/carter_navigation/params/carter_navigation_params.yaml use_sim_time:=True'
+```
+
+This uses the files installed by `carter_navigation`. The path is not the
+source path. Keep the same `ROS_DOMAIN_ID` in the `sim` and `ros` services.
+
+RViz exits on a headless machine because there is no display. This is
+expected. It does not mean that Nav2 or Antioch failed. Use an interactive
+Antioch Isaac stream to see the simulator scene. For example:
+
+```bash
+antioch run --stream src/main.py
+```
+
+Open the machine livestream in Mission Control. `antioch services exec` does
+not claim the stream. A Rerun view is available only when the running scenario
+or session logs Rerun data; the Nav2 process alone does not create that data.
+
+Nav2 also needs a TF tree that contains `map`, `odom`, and `base_link`. The
+bringup command does not create that tree. Until the simulator or robot driver
+publishes it, messages such as `frame "map" does not exist` and
+`Timed out waiting for transform from base_link to map` are expected. They
+describe missing robot TF, not a missing map file or an Antioch failure.
+
 ## Build a C++ workspace
 
 Put the ROS apt repository, compiler, `ros-dev-tools`, and required message
