@@ -114,27 +114,31 @@ branches. It does not read object orientation — the end-effector orientation i
 fixed from the initial radial angle — so this is position feedback, not pose
 feedback. The phase schedule is fixed; nothing here is learned.
 
-Measured envelope, suite run `4351ff2ec6d8453bb28dc8a3abdbeb89`: 15 of 18
-cases passed every check, in 2m 19s across 8 machines.
+Measured envelope, suite run `ad085a15c25e4ffdbc15c67eea2370ac`: 12 of 18
+members passed, five failed, and the nominal member was cancelled by a
+machine dispatch failure. A direct retry of nominal
+(`e543ba67127843f291fa766b0a5866cd`) passed, so the 18-case scenario verdict
+count is 13 passed and five failed, in 11m 32s across two machines.
 
-**All 18 cases ended with the object inside the bin.** The three that did not
-pass tripped secondary gates, and the recorded values say exactly which:
+**All 18 cases ended with the object inside the bin.** The five that did not
+pass every check tripped the gates below, and the recorded values say exactly
+which:
 
-| Case | Lift | Displacement | In bin | Check it failed | Measured / limit |
+| Case | Sustained lift | Displacement | In bin | Checks it failed | Measured / limit |
 |---|---:|---:|:--:|---|---:|
-| `yaw-45` | 0.276 m | 0.205 m | yes | grasp gate, containment | 0.0235 / 0.020 m, 0.291 / 0.25 m |
-| `scale-40mm` | 0.261 m | 0.219 m | yes | grasp gate, containment | 0.0232 / 0.020 m, 0.281 / 0.25 m |
-| `friction-2p0` | 0.161 m | 0.230 m | yes | place tolerance | 0.035132 / 0.035 m |
+| `pose-left` | 0.059792 m | 0.262 m | yes | grasp gate | 0.020146 / 0.020 m |
+| `yaw-45` | 0.051867 m | 0.205 m | yes | grasp gate, containment | 0.041784 / 0.020 m, 0.290618 / 0.25 m |
+| `scale-40mm` | 0.040154 m | 0.219 m | yes | sustained lift, grasp gate, containment | 0.040154 / 0.045 m, 0.042234 / 0.020 m, 0.281076 / 0.25 m |
+| `friction-0p6` | 0.071977 m | 0.237 m | yes | grasp gate | 0.020476 / 0.020 m |
+| `friction-2p0` | 0.052157 m | 0.230 m | yes | grasp gate, place tolerance | 0.025079 / 0.020 m, 0.035132 / 0.035 m |
 
-Do not read a cause into these. Two of the three lifted, carried, and placed
-the object, then failed a gate rather than the task; `friction-2p0` missed the
-place tolerance by 132 micrometres. Two gates are known to be imprecise and
-are not yet corrected: the grasp check compares the absolute object-to-gripper
-distance with a fixed 20 mm instead of comparing it with the offset measured
-at closure, so a larger object fails it without the grasp ever changing; and
-it samples once after traverse rather than across the carry, so it cannot see
-a transient loss. Treat both as measurement limits, not as robot behaviour,
-until a controlled experiment says otherwise.
+The corrected values are the measurements that decide these gates. The grasp
+value is the maximum closure-offset error sampled on every lift and traverse
+step, and the lift value is the minimum height sustained through traverse.
+`scale-40mm` therefore fails the sustained-lift gate at 0.040154 m, while
+`yaw-45` reaches 0.290618 m and fails the unchanged containment maximum-height
+limit. `friction-2p0` still misses the place tolerance by 132 micrometres and
+also records a 0.025079 m maximum closure-offset error.
 
 Copy this scenario before composing your own. Eight checks with measured
 tolerances decide the outcome, so a miss is recorded as a failure rather than
