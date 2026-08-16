@@ -122,18 +122,21 @@ In-run (on the array, before publishing):
 def validate_frame(rgb) -> tuple[bool, str]:
     if rgb.max() == 0:
         return False, "no light reaches camera — add DomeLight + DistantLight"
-    if rgb.std() < 5:
-        return False, f"flat frame (std={rgb.std():.1f}) — check camera aim"
     if rgb.mean() > 220:
         return False, f"overexposed (mean={rgb.mean():.0f}) — reduce intensity or filmIso"
     if rgb.mean() < 10:
         return False, f"underexposed (mean={rgb.mean():.0f}) — add fill lights or raise filmIso"
+    if rgb.std() < 5:
+        return False, f"flat frame (std={rgb.std():.1f}) — check camera aim"
     return True, f"ok (mean={rgb.mean():.0f}, max={rgb.max()}, std={rgb.std():.0f})"
 ```
 
 The `std < 5` check catches what mean/max miss: a flat gray wall, a camera
 buried in geometry, or an empty viewport all have nonzero mean and max but no
-scene content.
+scene content. These statistics are only a degeneracy screen. A task camera
+also needs a content oracle before publication: semantic-mask pixel count,
+projected subject bounding-box occupancy, or a known-colour pixel count. A
+well-exposed background with the robot outside the frame must still fail.
 
 On downloaded artifacts (local QA after `antioch scenario download SCENARIO_RUN_ID`), file
 size is the fast pre-filter before decoding:

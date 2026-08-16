@@ -68,6 +68,21 @@ mapping of numbers into child scalar series, and falls back to a text log for
 anything else. Use `Logger.image` for pictures and `Logger.scalar` for numbers;
 `value` is for the rest — transforms, boxes, point clouds, meshes.
 
+`Logger` is explicit and time-local. A call writes one sample at the current
+`sim_time`. It does not inspect the USD stage, turn prims into Rerun geometry,
+or backfill the time before that call. Rerun keeps the latest sample visible
+after it exists, but an entity first logged at 3 s is absent before 3 s.
+
+Make the first useful rendered step a complete review state: log the owned
+camera, drawable scene geometry, and baseline metrics together after reset and
+camera setup. Then log on meaningful task changes. Do not copy a fixed warm-up
+count or cadence from another scenario; the task decides when its evidence
+changes.
+
+A transform is not geometry. `Transform3D` only positions child entities; it
+does not draw a robot or prop. Log `Boxes3D`, `Points3D`, `Mesh3D`, or another
+drawable archetype at the scene path when a 3D pane must show an object.
+
 ```python
 logger.value("base", rr.Transform3D(translation=[0.0, 0.0, 0.5], quaternion=[0.0, 0.0, 0.0, 1.0], parent_frame="World", child_frame="robot/base"))
 logger.value("scene/obstacle", rr.Boxes3D(centers=[[1.0, 0.0, 0.5]], sizes=[[0.5, 0.5, 1.0]], colors=[[255, 128, 0]]))
@@ -98,6 +113,11 @@ Two rules the viewer enforces silently:
    you want visible needs a view, `/antioch/viewport` included. Naming any view at all
    turns the viewer's own automatic layout off.
 
+The SDK supplies a hidden time panel on `sim_time` when the author omits one.
+Add a panel only when the reviewer needs it, and give it an explicit state.
+Select `wall_time` only when the evidence explicitly concerns process latency
+rather than simulated motion.
+
 `SpatialInformation` is a Rerun blueprint archetype, not an Antioch class, and
 it has no default frame:
 
@@ -124,7 +144,6 @@ import rerun.blueprint as rrb
 ROBOT_DASHBOARD = rrb.Blueprint(
     rrb.Horizontal(
         rrb.Vertical(
-            rrb.Spatial2DView(origin="/viewport", name="Scene"),
             rrb.Spatial2DView(origin="/robot/camera/front", name="Bench camera"),
             rrb.Spatial3DView(
                 origin="/robot", contents="/robot/**", name="Robot", spatial_information=rrb.SpatialInformation(target_frame="World", show_axes=True)
@@ -135,21 +154,56 @@ ROBOT_DASHBOARD = rrb.Blueprint(
 )
 
 
-@antioch.scenario()
+@antioch.scenario(capture=False)
 def robot_dashboard(run: antioch.ScenarioRun) -> None:
     import rerun as rr
+    import numpy as np
+    from isaacsim.core.api.objects import FixedCuboid
+    from isaacsim.core.utils.prims import create_prim
+    from isaacsim.core.utils.viewports import set_camera_view
 
     run.set_blueprint(ROBOT_DASHBOARD)
     logger = antioch.Logger("robot")
+    world = antioch.world()
+    create_prim("/World/dome_light", "DomeLight", attributes={"inputs:intensity": 400.0})
+    create_prim("/World/key_light", "DistantLight", attributes={"inputs:intensity": 1500.0})
+    world.scene.add(
+        FixedCuboid(
+            prim_path="/World/ReviewBody",
+            name="review_body",
+            position=np.array([0.0, 0.0, 0.25]),
+            size=1.0,
+            scale=np.array([0.4, 0.3, 0.5]),
+            color=np.array([0.9, 0.2, 0.1]),
+        )
+    )
+    world.reset()
+    set_camera_view(eye=[1.2, 1.2, 0.9], target=[0.0, 0.0, 0.25], camera_prim_path="/OmniverseKit_Persp")
+    world.step(render=True)
+    frame = antioch.capture_viewport()
+    assert frame is not None, "active viewport returned no frame"
+    rgb = np.asarray(frame)[..., :3]
+    mean, std = float(rgb.mean()), float(rgb.std())
+    subject_pixels = int(((rgb[..., 0] > 1.2 * rgb[..., 2]) & (rgb[..., 0] > 50)).sum())
+    exposure_ok = 10 <= mean <= 220
+    contrast_ok = std >= 5
+    subject_ok = subject_pixels >= 50
+    run.check("review frame has useful exposure", exposure_ok, detail=f"mean rgb {mean:.1f}")
+    run.check("review frame has visible contrast", contrast_ok, detail=f"rgb standard deviation {std:.1f}")
+    run.check("red review body is framed", subject_ok, detail=f"body pixels {subject_pixels}")
+    # One complete initial review state at the earliest useful simulated time.
+    if exposure_ok and contrast_ok and subject_ok:
+        logger.image("camera/front", rgb)
     logger.value("base", rr.Transform3D(parent_frame="World", child_frame="robot/base"))
+    logger.value("scene/body", rr.Boxes3D(centers=[[0.0, 0.0, 0.25]], sizes=[[0.4, 0.3, 0.5]], colors=[[230, 51, 26]]))
     logger.scalar("metrics/speed_mps", 0.0)
 ```
 
 ### Panels
 
-The platform opens the blueprint tree and selection inspector hidden and the
-time panel collapsed, on the automatic layout and on yours alike, so the window
-belongs to the telemetry. Naming a panel keeps yours:
+The platform opens the blueprint tree, selection inspector, and time panel
+hidden, on the automatic layout and on yours alike, so the window belongs to
+the telemetry. Give a panel an explicit state to opt it back in:
 
 ```python
 rrb.Blueprint(rrb.Grid(*views), rrb.SelectionPanel(state="Expanded"))
@@ -164,10 +218,15 @@ are `rrb.BlueprintPanel`, `rrb.SelectionPanel`, and `rrb.TimePanel`.
 | --- | --- |
 | Stream stays `starting` | Declare the lease before boot: `--stream` on the dispatch, or `antioch jupyter stream --kernel KERNEL_ID --json` before the cell calls `antioch.boot()`. Stop a stale kernel or wait for the current lease holder. |
 | Live viewer has no data | `Logger` calls only write during an active scenario or session. Dispatch with `--stream` (or `ScenarioSession(..., live=True)` behind a native/Jupyter lease), then emit at least one sample on a valid relative path. A headless run still records the same samples in its `.rrd`. |
+| Playback starts empty, then the scene appears seconds later | The simulator started at 0 s, but the first `Logger` calls came after setup, settling, or a task phase. Log one complete review state on the earliest useful rendered step. Rerun cannot show an entity before its first sample. Disable platform capture if its uncontrolled early frames make that gap misleading. |
 | Blueprint not applied | `set_blueprint` must be called while the run is active, and `SpatialInformation` needs the exact `target_frame` your transforms use. Remember an author blueprint replaces the automatic one entirely. |
 | One pane visible, the rest behind tabs | The blueprint's root is a bare list of views. Wrap them in `rrb.Grid`/`Horizontal`/`Vertical`. |
-| `/antioch/viewport` frames are solid black | Nothing in view is lit — usually the stage has no light at all. Add one (`create_prim("/World/Light", "DomeLight", attributes={"inputs:intensity": 3000.0})` on Isaac Sim, `sim_utils.DomeLightCfg(intensity=3000.0)` on Isaac Lab). The run says so once at the end: `viewport telemetry captured N frames and every pixel of every one was black`. Streaming makes no difference. |
-| `/antioch/viewport` shows a scene far away, empty, or flat grey | Expected on a bench-scale workcell: the platform reads back Kit's active viewport and does not frame the shot, and a headless boot often draws that texture as one flat colour. This is a known limitation, not a bug in your scenario. Log your own camera through `Logger.image` at `/viewport` and give it a view — that is the reliable path, and every shipped example takes it. |
+| `/antioch/viewport` frames are solid black | Nothing in view is lit. Start with a `DomeLight` near 400 plus a `DistantLight` near 1500, render, then measure the frame. The run warns once when every frame is black. Streaming makes no difference. |
+| Frames are white or pale grey | Lights or camera exposure are too high. Reduce intensity before changing exposure. A mean above 220 fails the generic exposure screen; the SDK warns when every platform frame is overexposed. |
+| `/antioch/viewport` shows a scene far away, empty, or flat grey | It is an uncontrolled read-back of Kit's active viewport. An authored camera prim does not switch it. After the final reset, aim `/OmniverseKit_Persp`, render, capture, validate, and log the accepted frame at `/viewport`; or use a dedicated render product and disable platform capture. |
+| The primary image has useful mean/std but misses the task | Mean and standard deviation only reject degenerate images. Add a content oracle: semantic-mask pixel count, projected subject bounds, or known-colour occupancy. Reject the frame before `Logger.image` when that oracle fails. |
+| The 3D pane is empty axes | The recording has transforms but no drawable geometry. Add `Boxes3D`, `Points3D`, `Mesh3D`, or another drawable archetype under the pane's contents path. |
+| Playback opens on `wall_time` | Add `rrb.TimePanel(timeline="sim_time")` to an authored blueprint. Automatic blueprints select `sim_time`. |
 | Far fewer `/antioch/viewport` frames than the run is long | Frames ride a 0.5 s sim-time cadence, so expect about two per simulated second and no more — a ten-second scenario is twenty frames, not a video. Every run logs what it got (`viewport telemetry captured N frames over X.Xs of simulation, N.N per second`); compare with the cadence before theorising. Materially under two per second is a defect worth reporting. `viewport telemetry stopped after N frames — the renderer returned no further frame in the last X.Xs of simulation` means the renderer stopped answering: count rows with the RRD reader and report it. |
 | No `/antioch/viewport` frames at all | Capture was disabled (`capture=False`, `ANTIOCH_TELEMETRY_CAPTURE=0`), the run never stepped a simulator (frames ride the physics callback), or the source failed — the last logs `default viewport capture stopped` once and never fails the run. |
 | The `.rrd` is enormous | Something is logging raw images. Route every picture through `Logger.image`, which downsamples and JPEG-compresses; `logger.value(..., rr.Image(...))` stores the frame as-is. |

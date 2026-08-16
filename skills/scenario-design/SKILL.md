@@ -184,27 +184,84 @@ ScenarioRun.add_artifact(path: str | Path, *, name: str | None = None, content_t
 Every Antioch scenario, and every native `ScenarioSession`, records a
 dashboard without a line of telemetry code:
 
-- **A read-back of Kit's active viewport.** Once physics is stepping, the
-  platform captures the viewport and logs one JPEG to `/antioch/viewport` on
-  the `sim_time` timeline about twice a simulated second, 640 px wide, capped
-  at 600 frames per run. What it shows is whatever Kit's viewport camera is
-  pointed at, which on a bench-scale workcell may not frame the task. For a
-  controlled view, log the scenario's own camera through `Logger.image` at
-  `/viewport` or another authored path.
+- **A diagnostic read-back of Kit's active viewport.** Once physics is
+  stepping, the platform logs one JPEG to `/antioch/viewport` about twice a
+  simulated second, 640 px wide, capped at 600 frames. It does not select,
+  aim, or focus a camera. A USD camera at `/World/Camera` is not automatically
+  the active viewport camera. Never use this uncontrolled picture as the only
+  visual evidence for a bench-scale task.
 - **A viewer layout derived from what was logged** — a 2D view per entity
-  carrying an image or video, `/antioch/viewport` first, one time-series view per
-  scalar path, and a 3D view when any spatial entity exists, all under a
-  visible container.
-- **The viewer's own chrome collapsed out of the way**: the blueprint tree and
-  selection inspector open hidden and the time panel collapsed, so the window
-  belongs to the telemetry. Name a panel in your own blueprint to keep it.
+  carrying an image or video, authored images first and
+  `/antioch/viewport` last, one time-series view per scalar path, and a 3D
+  view only when a drawable 3D archetype exists. `Transform3D` positions
+  geometry but draws no mesh, box, or point by itself.
+- **`sim_time` as the default viewer timeline.** The stored time panel names
+  it explicitly, so playback does not open on `wall_time`.
+- **The viewer's control panels hidden by default**: the blueprint tree,
+  selection inspector, and time panel do not take space from telemetry. Give a
+  panel an explicit state only when the reviewer needs it.
 
 Capture rides the physics-step callback, never changes the run's outcome, and
 reports what it got at the end (`viewport telemetry captured N frames over
-X.Xs of simulation, N.N per second`). Turn it off only when frames are
-overhead a throughput-critical suite cannot afford:
+X.Xs of simulation, N.N per second`). It warns when every frame is black,
+underexposed, overexposed, or nearly uniform. Those warnings diagnose the
+active viewport; they do not replace a scenario check. Turn platform capture
+off when a dedicated camera is the complete visual record, or when its cost is
+not justified:
 `@antioch.scenario(capture=False)`, `ScenarioSession(..., capture=False)`, or
 `ANTIOCH_TELEMETRY_CAPTURE=0`.
+
+Rerun shows explicit samples, not the USD stage. Each `Logger` call writes one
+value at the current `sim_time`; it does not discover scene objects, preserve
+an unlogged state, or backfill earlier time. If the first camera and drawable
+3D samples arrive at 3 s, those panes are empty before 3 s even though the
+assets already exist in Kit.
+
+After reset and camera setup, emit one complete initial review state at the
+earliest useful rendered step: the authored image, drawable scene geometry,
+and baseline metrics. Then log again when the evidence changes. The scenario
+decides those moments; there is no required step count or telemetry cadence.
+If platform capture would record the uncontrolled camera before the owned
+camera is ready, aim it before the first rendered step or set `capture=False`.
+
+## Own the review camera
+
+For classic Isaac `World` active-viewport evidence, use this order after scene
+setup. Aim the actual active camera path, render, read back, screen the pixels,
+then log the accepted frame on an authored path:
+
+```python
+world.reset()
+set_camera_view(eye=[1.2, 1.2, 0.9], target=[0.0, 0.0, 0.25], camera_prim_path="/OmniverseKit_Persp")
+world.step(render=True)
+frame = antioch.capture_viewport()
+assert frame is not None, "active viewport returned no frame"
+rgb = np.asarray(frame)[..., :3]
+mean, std = float(rgb.mean()), float(rgb.std())
+subject_count = subject_pixels(rgb)
+exposure_ok = 10 <= mean <= 220
+contrast_ok = std >= 5
+subject_ok = subject_count >= MIN_SUBJECT_PIXELS
+run.check("review frame has useful exposure", exposure_ok, detail=f"mean rgb {mean:.1f}")
+run.check("review frame has visible contrast", contrast_ok, detail=f"rgb standard deviation {std:.1f}")
+run.check("task subject is framed", subject_ok, detail=f"subject pixels {subject_count}")
+if exposure_ok and contrast_ok and subject_ok:
+    logger.image("viewport", rgb)
+```
+
+In the classic `World` path, set the camera after `world.reset()` so the final
+stage and active viewport are the ones you aim. Isaac Lab's
+`SimulationContext.set_camera_view` can queue its view until visualizer
+initialization; follow that lifecycle instead. A named USD camera alone does
+not switch Kit's active viewport. Use a dedicated render product when the
+evidence needs a stable camera independent of the livestream; log that RGB
+array through `Logger.image` in the same way.
+
+Mean and standard deviation only reject degenerate frames. They cannot prove
+that the robot, target, or contact is visible. Add one task-specific framing
+oracle such as semantic-mask pixel count, projected bounding-box occupancy,
+or known-colour occupancy. Do not upload or accept the frame before both the
+generic screen and the content oracle pass.
 
 ## Log your own telemetry
 
@@ -236,22 +293,27 @@ simulated second — and prefer more frames at a smaller size over a few
 enormous ones. A 960-wide JPEG of a lit scene is about 12 KB.
 
 Antioch stamps every write with `wall_time`, and with `sim_time` once Kit is
-running. Never call `rr.set_time`, `rr.init`, `rr.connect`, or
+running. One call is one sample at that current time; later calls do not fill
+an earlier gap. Stored blueprints default playback to `sim_time`. Never call
+`rr.set_time`, `rr.init`, `rr.connect`, or
 `rr.send_blueprint` — the platform owns the recording.
 
 ## Choose a layout, or don't
 
-The automatic blueprint is good enough for most runs; author one when the
-default ordering hides the thing that matters.
+The automatic blueprint leads with authored cameras, puts platform viewport
+capture last, selects `sim_time`, and hides all control panels. Author a layout
+only when the evidence needs a specific composition.
 
 ```python
 run.set_blueprint(rrb.Blueprint(rrb.Horizontal(rrb.Grid(*views), rrb.Grid(*series))))
 ```
 
 An author blueprint replaces the automatic one **entirely** — include a view
-for every entity you still want visible, `/antioch/viewport` included. Name a
-container (`Grid`, `Horizontal`, `Vertical`) as the root: a bare list of views
-serializes as a tab container, which shows one pane and hides the rest.
+for every entity you still want visible. Include `/antioch/viewport` only when
+that diagnostic view helps. Name a container (`Grid`, `Horizontal`,
+`Vertical`) as the root: a bare list of views serializes as a tab container,
+which shows one pane and hides the rest. Omit control panels unless the review
+needs one; the SDK supplies a hidden time panel on `sim_time`.
 [references/telemetry.md](references/telemetry.md) owns the verified 0.36.0
 constructors, `SpatialInformation`, and the live-versus-recorded flow.
 
@@ -282,10 +344,12 @@ what it actually recorded:
 1. `antioch scenario show SCENARIO_RUN_ID` — is the outcome the task's
    outcome, and does every criterion you meant to declare appear?
 2. `antioch scenario download SCENARIO_RUN_ID`, then `rerun rrd stats <file>`
-   and `rerun rrd print <file> | head` — are your entity paths there, and does
-   `/antioch/viewport` carry roughly two frames per simulated second?
-3. Open it in the viewer when the layout matters. The stored blueprint is what
-   a reviewer sees.
+   and `rerun rrd print <file> | head` — are the authored camera and drawable
+   3D paths present, and do samples carry `sim_time`?
+3. Decode the primary image. Check mean 10–220, standard deviation at least 5,
+   and the task-specific subject oracle. Do not treat a nonzero mean as proof.
+4. Open it in the viewer. Confirm the authored camera leads, the 3D pane draws
+   geometry rather than empty axes, and playback opens on `sim_time`.
 
 **A green suite whose RRD you never opened is not evidence.**
 
@@ -305,7 +369,15 @@ follow-up and cancellation is its suites reference.
 - [ ] Variation is expressed as cases, not as a loop inside one scenario.
 - [ ] Thresholds are in `results`; per-episode detail is an artifact.
 - [ ] Camera frames go through `Logger.image`.
+- [ ] The review camera is aimed after reset, rendered, decoded, and validated
+      before its frame is accepted.
+- [ ] A task-specific oracle proves the subject is in frame; mean/std only
+      screen exposure and flat captures.
 - [ ] Entity paths are a stable hierarchy a blueprint can select without
       knowing per-run values.
-- [ ] The stage has a light, or `/antioch/viewport` will be black.
-- [ ] The recording has been opened, not just produced.
+- [ ] The earliest useful rendered step logs one complete camera, drawable 3D,
+      and metric state; setup and settle time do not leave an unexplained gap.
+- [ ] A 3D view has a drawable archetype such as `Boxes3D`, `Points3D`, or a
+      mesh; transforms alone are not visible.
+- [ ] The stage uses calibrated lights; black and overexposed frames both fail.
+- [ ] The stored blueprint names `sim_time`, and the recording has been opened.

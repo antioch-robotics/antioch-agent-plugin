@@ -50,16 +50,28 @@ Use the SDK helper when the browser view and the saved image should come from
 the same active USD camera:
 
 ```python
-def capture_viewport_frame() -> object | None:
+def capture_viewport_frame(world, eye, target) -> object | None:
     import antioch
+    from isaacsim.core.utils.viewports import set_camera_view
 
+    # For the classic Isaac World path, aim the final active viewport after
+    # reset, then render before read-back.
+    world.reset()
+    set_camera_view(eye=eye, target=target, camera_prim_path="/OmniverseKit_Persp")
+    world.step(render=True)
     return antioch.capture_viewport()
 ```
 
-Call it after `world.step(render=True)`. The read-back pumps Kit a bounded
-number of times and returns `None` rather than waiting forever. It does not
-create a render product. Use the RTX stack below when a run needs a dedicated
-camera, multiple views, or named AOVs.
+Creating `/World/ReviewCamera` does not activate it. `set_camera_view` only
+controls the active viewport when `camera_prim_path` names that active camera;
+`/OmniverseKit_Persp` is the standard path. The Isaac Lab
+`SimulationContext.set_camera_view` path can queue its view until visualizer
+initialization, so follow that API's lifecycle rather than moving it blindly.
+
+The read-back pumps Kit a bounded number of times and returns `None` rather
+than waiting forever. It does not create a render product. Validate exposure,
+contrast, and task-subject occupancy before logging it. Use the RTX stack below
+when a run needs a dedicated camera, multiple views, or named AOVs.
 
 ## Fundamentals
 
