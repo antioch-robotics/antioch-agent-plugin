@@ -59,7 +59,7 @@ suite's scenario runs
 across other eligible machines.
 Queued workers are headless; development `watch`
 rules and `ports` tunnels are not part of the queued environment. Do not
-combine `--queue` with a typed `--stream`, `--verbose`, `--raw-logs`,
+combine `--queue` with a typed `--stream`, `--verbose`,
 `--machine`, or `--machines`; `--json` on `suite run` requires `--queue`
 (`running.md` explains the constraints).
 

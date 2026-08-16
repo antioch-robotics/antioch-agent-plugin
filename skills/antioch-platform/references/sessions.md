@@ -73,7 +73,7 @@ culled.
 ## Direct shells
 
 The `antioch services ssh` command opens a PTY in `sim` by default — when the
-stack has no sim service, name the service explicitly. It resolves an existing
+project has no sim service, name the service explicitly. It resolves an existing
 assignment but does not create a recorded run or retain results. Use
 `antioch services exec` for a finite diagnostic command; it has a 120-second
 ceiling, so use `antioch run --timeout SECONDS` for longer simulation code.

@@ -22,8 +22,8 @@ and exit 0. An unknown name gets a "did you mean" suggestion.
 
 | Command | Purpose | Key options | JSON |
 |---|---|---|---|
-| `run FILE [ARGS]...` | Run one project-local `.py` file on a machine; output relays directly | `--machine`, `--stream/--no-stream`, `--restart`, `--timeout` (900 s), `--verbose` | none — the program owns stdout; exit code is the remote process's |
-| `scenario run` | Select and run authored scenarios (flag-based; no positional name) | `--scenario`, `-t/--tag`, `--exclude-tag`, `--path`, `--case`, `--set`, `--machine` (repeatable), `--machines`, `--timeout`, `--stream/--no-stream`, `--restart`, `--verbose`, `--raw-logs`, `--queue` | `--json` requires `--queue`; bare array of queued run records |
+| `run FILE [ARGS]...` | Run one project-local `.py` file on a machine; output relays unchanged | `--machine`, `--stream/--no-stream`, `--restart`, `--timeout` (900 s) | none — the program owns stdout; exit code is the remote process's |
+| `scenario run` | Select and run authored scenarios (flag-based; no positional name) | `--scenario`, `-t/--tag`, `--exclude-tag`, `--path`, `--case`, `--set`, `--machine` (repeatable), `--machines`, `--timeout`, `--stream/--no-stream`, `--restart`, `--verbose`, `--queue` | `--json` requires `--queue`; bare array of queued run records |
 | `suite run NAME` | Run one authored suite | the same machine, timeout, stream, restart, output, and queue controls as `scenario run`; no ad hoc scenario selectors | `--json` requires `--queue`; bare queued suite object |
 
 ### Scenario history
@@ -32,7 +32,7 @@ and exit 0. An unknown name gets a "did you mean" suggestion.
 |---|---|---|---|
 | `scenario list` | Filter organization-shared run history | `-q/--search`, `--scenario`, `--project`, `--suite`, `--suite-run-id`, `--invocation-id`, `--dispatched-from`, `--user`/`--mine`, `-t/--tag`, `--no-suite`, `--param`, `--result`, `--since`/`--until`, `--dispatch`, `--phase`, `--outcome`, `--cursor`, `--limit` (1–200, 50) | `{items, next_cursor}` of run records |
 | `scenario show SCENARIO_RUN_ID` | One run: phase, outcome, params, results, checks, and saved artifact names | `--logs`, `--service` (requires `--logs`) | run record |
-| `scenario logs SCENARIO_RUN_ID` | Replay captured output — stdout to stdout, stderr to stderr | `--stdout`/`--stderr` (exclusive), `-f/--follow`, `--raw-logs` | `{items, next_cursor: null}` of log entries |
+| `scenario logs SCENARIO_RUN_ID` | Replay captured output unchanged — stdout to stdout, stderr to stderr | `--stdout`/`--stderr` (exclusive), `-f/--follow` | `{items, next_cursor: null}` of log entries |
 | `scenario download SCENARIO_RUN_ID` | Signed-storage artifact download into `./SCENARIO_RUN_ID/` | `--artifact` (repeatable, logical key), `-o/--output`, `--force` | transfer manifest with per-file `sha256` |
 | `scenario cancel SCENARIO_RUN_ID` | Cancel a standalone queued or running scenario run | — | cancellation object with `changed` |
 | `scenario rerun SCENARIO_RUN_ID` | Queue a completed run again from its saved environment | — | the queued run record |
@@ -89,7 +89,6 @@ and exit 0. An unknown name gets a "did you mean" suggestion.
 | `assets pull ASSET` | Signed-storage download | `-v/--version` (latest), `-o/--output`, `--preview`, `--force` | transfer manifest |
 | `assets verify ASSET` | Temp-download and integrity check; nonzero exit on failure | `-v/--version` | none |
 | `assets repair ASSET` | Remove published versions whose file is missing | `-v/--version` (default: every version) | `{asset, asset_id, removed, kept}` |
-| `project current` | Project selected by the working directory | — | bare object; literal `null` outside any project |
 | `project list` | Locally known projects | — | bare array |
 | `project show` | One local project by name or id; optional `PROJECT` positional | — | bare object |
 | `init` | Scaffold a project locally (no prompts, no remote registration); optional `DIRECTORY` positional; refuses a directory already inside a project | `--engine` (`isaac-sim-6.0.1` or `isaac-lab-3.0`; default from the installed extra) | `{project_id, name, engine, path, remote_registered}` |

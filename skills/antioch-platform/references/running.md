@@ -67,10 +67,8 @@ parallel use.
 ## Watching output
 
 Foreground scenario output is a live board and deliberately has no JSON
-output. Two escalations exist when the board hides what you need:
-`--verbose` relays the process output while filtering Kit engine noise, and
-`--raw-logs` relays every byte unfiltered (it implies `--verbose`). Read
-the saved result after the run finishes:
+output. Use `--verbose` to replace the board with the complete native process
+stream. Read the saved result after the run finishes:
 
 ```bash
 antioch scenario show SCENARIO_RUN_ID --json
@@ -95,7 +93,7 @@ eligible machines. Development `watch` rules and `ports` connections are not
 included in queued runs.
 
 Queue flag constraints: do not combine `--queue` with a typed `--stream`,
-with `--verbose` or `--raw-logs`, or with `--machine` or `--machines` — each
+with `--verbose`, or with `--machine` or `--machines` — each
 is refused. `--restart` has no effect on queued work (workers always start a
 fresh stack), and `--json` on a dispatch command requires `--queue`. Cancel a
 queued or running standalone scenario with

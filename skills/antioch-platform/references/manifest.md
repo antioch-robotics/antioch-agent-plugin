@@ -103,7 +103,7 @@ Each fails with `service field '<key>' is not supported — <message>`:
 | `scale`, `replicas` | Scaling is not part of the dev subset; run one service declaration. |
 | `gpus`, `init` | Already injected on every service. |
 | `container_name` | Container names are derived from the project and service. |
-| `extends`, `include` | One `antioch.yaml` owns the complete stack. |
+| `extends`, `include` | One `antioch.yaml` owns all project services. |
 | `secrets` | Secret mounts are not supported; do not put credentials in `antioch.yaml`. |
 | `configs` | Use an ordinary environment value or synced file for non-secret configuration; config mounts are not supported. |
 | `develop` | Declare watch rules under `watch:` on the service. |
@@ -113,9 +113,9 @@ Any other unknown key fails with the supported-key list.
 ## Rules for the `sim` service
 
 The name `sim` identifies the simulation service. It is **optional**: a service-only
-stack (viewer, API, ROS tooling) is valid. Commands that run Isaac code —
-`antioch run`, scenario and suite dispatch, Jupyter kernels — refuse a stack
-without it: "this stack has no sim service; declare services.sim in
+service-only project (viewer, API, ROS tooling) is valid. Commands that run Isaac code —
+`antioch run`, scenario and suite dispatch, Jupyter kernels — refuse a project
+without it: "this project has no sim service; declare services.sim in
 antioch.yaml". When `sim` is present:
 
 1. It must keep `privileged: true`, `network_mode: host`, and `ipc: host` —

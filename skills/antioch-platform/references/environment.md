@@ -39,12 +39,12 @@ project:
 
 ```bash
 cd warehouse-amr
-antioch project current --json
+antioch project show --json
 antioch project list --json
 ```
 
-`project current` prints the project the working directory selects (literal
-`null` in JSON outside any project); `project show` names one by name or id.
+`project show` without an argument prints the project selected by the working
+directory; with an argument it selects a local project by name or ID.
 
 A project needs at least one service. The optional name `services.sim`
 identifies the simulation service. A service-only stack (viewer, API, ROS tooling)
@@ -110,7 +110,7 @@ antioch services up --watch
 The watcher starts before its initial sync, batches file events,
 propagates deletes, and reports failures instead of reconnecting silently.
 `ports` open authenticated local tunnels
-while the stack is up. Ctrl-C ends the watcher but leaves containers and
+while the services are up. Ctrl-C ends the watcher but leaves containers and
 declared ports
 running; use `antioch services down` to stop them. A bare `antioch services up`
 also opens declared ports and returns.

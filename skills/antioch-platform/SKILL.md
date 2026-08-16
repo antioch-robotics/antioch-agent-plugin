@@ -230,7 +230,7 @@ antioch services up --watch
 
 `services up` may allocate or reuse the project's machine, builds changed services,
 starts dependencies, and waits for their health checks. `--watch` arms file rules
-and stays in the foreground. Declared ports remain reachable while the stack is up.
+and stays in the foreground. Declared ports remain reachable while the services are up.
 Ctrl-C ends that watch session but leaves containers and declared ports running; use
 `antioch services down` to stop them. A bare `services up` also opens declared ports.
 `build`, `run`, scenario/suite dispatch, and Jupyter start are the other
