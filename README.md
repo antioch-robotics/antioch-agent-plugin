@@ -77,15 +77,15 @@ covers project setup, engine selection, and your first run.
 
 ## Install the plugin
 
-The commands below pin plugin version `v0.2.34`. To install the moving `main`
-branch instead, remove `#v0.2.34` from the Claude Code URL or remove
-`--ref v0.2.34` from the Codex command. A floating install can change without
+The commands below pin plugin version `v0.2.35`. To install the moving `main`
+branch instead, remove `#v0.2.35` from the Claude Code URL or remove
+`--ref v0.2.35` from the Codex command. A floating install can change without
 notice.
 
 ### Claude Code
 
 ```bash
-claude plugin marketplace add antioch-robotics/antioch-agent-plugin#v0.2.34
+claude plugin marketplace add antioch-robotics/antioch-agent-plugin#v0.2.35
 claude plugin install antioch@antioch
 ```
 
@@ -101,7 +101,7 @@ Claude Code can show a new project MCP server as pending until you approve it.
 ### Codex
 
 ```bash
-codex plugin marketplace add antioch-robotics/antioch-agent-plugin --ref v0.2.34
+codex plugin marketplace add antioch-robotics/antioch-agent-plugin --ref v0.2.35
 codex plugin add antioch@antioch
 ```
 
@@ -169,8 +169,15 @@ simulation work.
 If you installed the Antioch tools globally with `uv tool`, upgrade them first:
 
 ```bash
-uv tool upgrade antioch-sim
+uv tool install --python 3.12 antioch-sim@latest
+antioch --version
 ```
+
+Use `@latest`, not `uv tool upgrade`. `uv tool install antioch-sim` records the
+version you installed as a pin, and `uv tool upgrade` honours that pin: it
+prints a changed-package list and exits 0 while leaving the old version in
+place. Always read `antioch --version` afterwards rather than trusting the
+upgrade output.
 
 If the plugin uses an Antioch project environment instead, update
 `antioch-sim` with that project's package manager.
@@ -184,14 +191,19 @@ claude plugin marketplace update antioch
 claude plugin update antioch@antioch
 ```
 
-Codex:
+Codex — the marketplace was added at a pinned tag, so moving to a new version
+means removing it and adding the new tag. `codex plugin marketplace upgrade`
+refetches the pinned tag and reports success without changing anything, and
+adding the new tag over the old one is refused:
 
 ```bash
-codex plugin marketplace upgrade antioch
+codex plugin marketplace remove antioch
+codex plugin marketplace add antioch-robotics/antioch-agent-plugin --ref v0.2.35
 codex plugin add antioch@antioch
 ```
 
-Restart the agent after an update.
+Restart the agent after an update, then confirm the version actually moved
+before relying on the new guidance.
 
 ## Remove
 
@@ -248,9 +260,17 @@ Check the version first, because `uv tool install` pins a version and never
 upgrades on its own:
 
 ```bash
-uv tool list                 # look for the antioch-sim version
-uv tool upgrade antioch-sim
+uv tool list                                      # look for the antioch-sim version
+uv tool install --python 3.12 antioch-sim@latest  # `uv tool upgrade` cannot move a pin
+antioch --version                                 # the only proof it moved
 ```
+
+A stale entry in your agent's own configuration can also shadow the plugin's
+server. Codex keeps user-level servers in `~/.codex/config.toml`; a leftover
+`[mcp_servers.antioch-research]` there wins over the plugin's `.mcp.json` and
+survives every upgrade, even when it points at a path that no longer exists.
+Remove that block if it is present. `which antioch-research-mcp` cannot see
+this — it reports the working program while the agent runs the broken entry.
 
 A `-32602 invalid params` reply from `tools/list` is a defect in older
 `antioch-sim` releases: the server refused the optional pagination parameters
