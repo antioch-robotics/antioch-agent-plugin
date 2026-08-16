@@ -30,7 +30,7 @@ and exit 0. An unknown name gets a "did you mean" suggestion.
 
 | Command | Purpose | Key options | JSON |
 |---|---|---|---|
-| `scenario list` | Filter organization-shared run history | `-q/--search`, `--scenario`, `--project`, `--suite`, `--suite-run-id`, `--invocation-id`, `--dispatched-from`, `--user`/`--mine`, `-t/--tag`, `--no-suite`, `--param`, `--result`, `--since`/`--until`, `--dispatch`, `--phase`, `--outcome`, `--cursor`, `--limit` (1–200, 50) | `{items, next_cursor}` of run records |
+| `scenario list` | Filter run history; the current project is the default inside a project | `-q/--search`, `--scenario`, `--project`, `--all-projects`, `--suite`, `--suite-run-id`, `--invocation-id`, `--dispatched-from`, `--user`/`--mine`, `-t/--tag`, `--no-suite`, `--param`, `--result`, `--since`/`--until`, `--dispatch`, `--phase`, `--outcome`, `--cursor`, `--limit` (1–200, 50) | `{items, next_cursor}` of run records |
 | `scenario show SCENARIO_RUN_ID` | One run: phase, outcome, params, results, checks, and saved artifact names | `--logs`, `--service` (requires `--logs`) | run record |
 | `scenario logs SCENARIO_RUN_ID` | Replay captured output unchanged — stdout to stdout, stderr to stderr | `--stdout`/`--stderr` (exclusive), `-f/--follow` | `{items, next_cursor: null}` of log entries |
 | `scenario download SCENARIO_RUN_ID` | Signed-storage artifact download into `./SCENARIO_RUN_ID/` | `--artifact` (repeatable, logical key), `-o/--output`, `--force` | transfer manifest with per-file `sha256` |
@@ -56,7 +56,7 @@ and exit 0. An unknown name gets a "did you mean" suggestion.
 
 | Command | Purpose | Key options | JSON |
 |---|---|---|---|
-| `machine list` | Your assignments (personal, never another user's) | `--project`, `--all` | bare array of rows: id, urls, GPU, placement, state, generation, project, `dispatched_from`, `current` |
+| `machine list` | Your assignments (personal, never another user's) | `--project`, `--all-projects` | bare array of rows: id, urls, GPU, placement, state, generation, project, `dispatched_from`, `current` |
 | `machine status` | One machine plus live process, stream, and container state | `--project`, `--machine` | bare object |
 | `machine checkout` | Set the project's current machine (git-checkout analogy); local, allocates nothing; optional `MACHINE` positional | `--none` clears | mutation result; bare invocation prints the current machine id on stdout |
 | `machine release` | Release one assignment and stop its work; **idempotent** — already-released is success; optional `MACHINE` positional. Asks first when the machine is running work, naming what it stops | `--project`, `--machine`, `--yes` | released assignment |

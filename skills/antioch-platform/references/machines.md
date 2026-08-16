@@ -17,7 +17,7 @@ Commands that drive one machine resolve it in this order: an explicit
 `--machine MACHINE`, the project's checked-out machine, then the project's sole
 assignment. If several assignments exist and none is checked out, pass the
 selector explicitly. `machine list` defaults to the current project; add
-`--all` to see every project's assignments. `machine checkout --none` clears
+`--all-projects` to see every project's assignments. `machine checkout --none` clears
 the local choice and
 returns to the sole-assignment rule; a bare `antioch machine checkout` prints
 the current machine id on stdout for scripts. `machine release --machine

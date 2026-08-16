@@ -16,12 +16,14 @@ Suite runs have their own history; see `references/suites.md`.
 ```
 antioch scenario list --mine --since 7d
 antioch scenario list --suite nightly --outcome failed
+antioch scenario list --all-projects
 antioch scenario list --result 'final_z:<:0.4' --json
 ```
 
 Use `antioch scenario list --help` for the complete filter set. Common filters
 include scenario, project, suite, user, tag, parameter, result, time range,
-dispatch type, phase, and outcome.
+dispatch type, phase, and outcome. Inside a project, history defaults to that
+project. Use `--all-projects` to widen it.
 
 - `-q/--search` matches a scenario-name substring; `--scenario` is the exact
   authored name.
