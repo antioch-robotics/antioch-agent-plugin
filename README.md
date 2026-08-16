@@ -28,40 +28,64 @@ Python, while Antioch runs the simulator on a remote GPU machine.
 
 ## Install Antioch
 
-The plugin uses the Antioch CLI to run simulations and the
-`antioch-research-mcp` executable to research the simulation stack. The easiest
-way to install both is with [`uv`](https://docs.astral.sh/uv/getting-started/installation/). After installing `uv`, run:
+The plugin runs two programs from your shell: `antioch` for simulations and
+`antioch-research-mcp` for research. **Both must be on the `PATH` of the
+terminal you start the agent from.** That is the one requirement, and almost
+every setup problem is this requirement not being met.
+
+Install with [`uv`](https://docs.astral.sh/uv/getting-started/installation/):
 
 ```bash
 uv tool install --python 3.12 antioch-sim
 uv tool update-shell
 ```
 
-Start a new shell if `antioch` is not yet on your path. Then sign in and confirm
-the active account:
+This puts both programs on your `PATH` in every terminal, which is why it is
+the recommended install. Start a new shell, then sign in:
 
 ```bash
 antioch auth login
 antioch auth whoami
 ```
 
-If your project already installs `antioch-sim`, activate its virtual
-environment before you start the agent and skip the global tool installation.
-A project that authors simulations must also select one supported engine extra.
-The [Antioch SDK guide](https://console.preview.antioch.com/docs/quickstart/install-the-sdk)
+Before you start the agent, confirm both programs resolve:
+
+```bash
+which antioch antioch-research-mcp
+```
+
+Two paths must print. If either prints nothing, the agent will not find the
+research server, so fix this first — see
+[The agent cannot find Antioch Research](#the-agent-cannot-find-antioch-research).
+
+### If your project installs antioch-sim itself
+
+Then the programs live in that project's virtual environment instead of on your
+global `PATH`. Activate it in the terminal **before** you start the agent, and
+skip the `uv tool install` above:
+
+```bash
+cd /path/to/my-sim
+source .venv/bin/activate      # Windows PowerShell: .venv\Scripts\Activate.ps1
+which antioch antioch-research-mcp
+```
+
+An agent started from any other terminal will not see them. A project that
+authors simulations must also select one supported engine extra. The
+[Antioch SDK guide](https://console.preview.antioch.com/docs/quickstart/install-the-sdk)
 covers project setup, engine selection, and your first run.
 
 ## Install the plugin
 
-The commands below pin plugin version `v0.2.30`. To install the moving `main`
-branch instead, remove `#v0.2.30` from the Claude Code URL or remove
-`--ref v0.2.30` from the Codex command. A floating install can change without
+The commands below pin plugin version `v0.2.31`. To install the moving `main`
+branch instead, remove `#v0.2.31` from the Claude Code URL or remove
+`--ref v0.2.31` from the Codex command. A floating install can change without
 notice.
 
 ### Claude Code
 
 ```bash
-claude plugin marketplace add antioch-robotics/antioch-agent-plugin#v0.2.30
+claude plugin marketplace add antioch-robotics/antioch-agent-plugin#v0.2.31
 claude plugin install antioch@antioch
 ```
 
@@ -77,7 +101,7 @@ Claude Code can show a new project MCP server as pending until you approve it.
 ### Codex
 
 ```bash
-codex plugin marketplace add antioch-robotics/antioch-agent-plugin --ref v0.2.30
+codex plugin marketplace add antioch-robotics/antioch-agent-plugin --ref v0.2.31
 codex plugin add antioch@antioch
 ```
 
@@ -93,24 +117,18 @@ Restart the agent after installation.
 
 ## Put the agent to work
 
-Start Codex or Claude Code from an Antioch project with its environment active. On macOS or Linux:
+Start the agent from your project directory:
 
 ```bash
 cd /path/to/my-sim
-source .venv/bin/activate
-codex
+codex                          # or: claude
 ```
 
-On Windows PowerShell:
+If you installed with `uv tool install`, that is all you do — the programs are
+already on your `PATH`. If the project owns its own virtual environment,
+activate it in this terminal first, as described above.
 
-```powershell
-cd C:\path\to\my-sim
-.venv\Scripts\Activate.ps1
-codex
-```
-
-Run `claude` instead of `codex` for Claude Code. Then give the agent a concrete
-robotics objective. For example:
+Then give the agent a concrete robotics objective. For example:
 
 > Inspect this robotics stack and build an Antioch scenario for its obstacle
 > avoidance behavior. Reuse the existing autonomy services, robot model, and
@@ -202,9 +220,44 @@ Run `antioch auth logout` if you also want to remove the local Antioch login.
 
 ## Troubleshooting
 
-- **`antioch-research-mcp` is not found:** run `uv tool list` and confirm that
-  `antioch-sim` appears. Then run `uv tool update-shell`, start a new shell, and
-  check `claude mcp list` or `codex mcp list --json` again.
+### The agent cannot find Antioch Research
+
+The agent reports no research tools, or Antioch Research is absent from the MCP
+list entirely. **An absent server prints nothing at all**, so treat a missing
+line as this problem rather than as a healthy list.
+
+Run this in the same terminal you start the agent from:
+
+```bash
+which antioch-research-mcp
+```
+
+- **Nothing prints.** The agent cannot start a program it cannot find. Either
+  run `uv tool install --python 3.12 antioch-sim` followed by
+  `uv tool update-shell` and start a new shell, or activate the project virtual
+  environment that holds it. Then start the agent from that same terminal.
+- **A path prints, but the agent still shows no tools.** Restart the agent —
+  it reads the MCP list once at startup. Claude Code also holds a new server at
+  `⏸ Pending approval` until you approve it inside `claude`.
+
+An agent you started before installing Antioch keeps the old, empty list.
+
+### Antioch Research is listed but fails to connect
+
+Check the version first, because `uv tool install` pins a version and never
+upgrades on its own:
+
+```bash
+uv tool list                 # look for the antioch-sim version
+uv tool upgrade antioch-sim
+```
+
+A `-32602 invalid params` reply from `tools/list` is a defect in older
+`antioch-sim` releases: the server refused the optional pagination parameters
+that some clients send, which left that client holding no tools at all.
+Upgrading `antioch-sim` and restarting the agent resolves it.
+
+### Other problems
 - **Antioch Research reports that authentication is required:** run
   `antioch auth login`, then retry the request.
 - **The plugin is installed but its guidance is absent:** restart the agent and
