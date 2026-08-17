@@ -1,10 +1,9 @@
 # Mission Control — hosted authoring
 
 Mission Control is Antioch's hosted authoring environment in the webapp. It
-provides a signed-in CLI, runnable example projects, JupyterLab, and an agent
-terminal. Read this file when `ANTIOCH_WORKSPACE_ID` is set, when a run's
-origin shows `Mission Control`, or when the user works from the webapp instead
-of a local checkout.
+provides a signed-in CLI and runnable example projects. Read this file when
+`ANTIOCH_WORKSPACE_ID` is set, when a run's origin shows `Mission Control`, or
+when the user works from the webapp instead of a local checkout.
 
 ## What Mission Control provides
 
@@ -35,14 +34,16 @@ same CLI. The differences are:
 - **Auth verbs are refused.** `auth login`, `auth logout`, and `auth switch`
   fail with "Mission Control runs as the user who opened it" — the webapp
   owns the account. `antioch auth whoami --json` still reports the identity.
-- **Hosted JupyterLab** is served through Mission Control's internal gateway (the hidden
-  `--hosted`/`--port` pair on `jupyter lab`); the webapp opens it — do not
-  start it by hand. `antioch jupyter stream` exists specifically to put a
-  kernel's Isaac GUI on the Mission Control livestream pane.
-- The webapp's Launch pane (Run live / Run / Queue) and Machines pane are GUI
-  twins of `scenario run`, `--queue`, and the list commands. The Machines pane
-  shows one row per assigned machine and speaks the same status phrases as
-  `antioch machine list`.
+- **The Launch pane offers Queue only, and the Jupyter and Agent panes are
+  not offered at all.** Each of those takes a GPU machine for the one seat
+  that opened it and holds it, and the fleet is far smaller than the number
+  of people using this console, so the console dispatches through the queue
+  instead. Queue is the GUI twin of `scenario run --queue`. Do not tell a
+  user to press a Run, Run live, Jupyter, or Agent control here; for an
+  interactive run, a notebook, or an agent, they use the CLI from their own
+  computer.
+- The Machines pane shows one row per assigned machine and speaks the same
+  status phrases as `antioch machine list`.
 
 ## Provenance: `dispatched_from`
 
