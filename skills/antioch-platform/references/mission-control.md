@@ -22,7 +22,10 @@ of a local checkout.
 ## How to recognize Mission Control
 
 - `ANTIOCH_WORKSPACE_ID` is set in the environment.
-- Example projects live under `~/examples`, ready to dispatch.
+- Example projects are ready to dispatch, one home directory per scope:
+  `~/shared` for the baked samples, `~/antioch-examples` for the public
+  examples repository, and `~/<org>` for the organization starter. There is
+  no `~/examples`.
 
 ## CLI differences inside Mission Control
 
