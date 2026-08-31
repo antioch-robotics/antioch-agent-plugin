@@ -117,7 +117,7 @@ kernels are live. JSON outputs are bare objects.
 
 | Variable | Meaning |
 |---|---|
-| `ANTIOCH_ENV` | Deployment profile: `preview` (default) or `prod`. `staging` is an alias for preview. Set it before `auth login` and keep it set — credentials are stored per environment. |
+| `ANTIOCH_ENV` | Deployment profile: `prod` (default) or `preview`. `staging` is an alias for preview. Set it before `auth login` and keep it set — credentials are stored per environment. |
 | `ANTIOCH_CONFIG_DIR` | Exact config-directory override. Isolates credentials and allocations per agent or test run without touching the user's store. |
 | `XDG_CONFIG_HOME` | Config root when no override; default `~/.config`. |
 | `ANTIOCH_WORKSPACE_ID` | Internal marker set by Mission Control; switches the dispatch origin to `cloud-workspace`. Never set it yourself. |
