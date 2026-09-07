@@ -1,81 +1,168 @@
-# Live sessions: `antioch jupyter`, streaming, and direct shells
+# Work with sessions
 
-The Jupyter kernel surface is the agent iteration loop: start one kernel on the
-machine, drive it one cell at a time, and stop it when done. A kernel is a
-machine resource, not a client's process. It survives the command that made it
-so the next cell lands on an Isaac that is already booted, but an unattended
-idle kernel is eventually culled.
+A session runs one project's services on managed compute. It is
+`interactive` or `background`. Interactive sessions support `services exec`,
+direct service access, development watch actions, routes, attached scenarios
+and suites, and Jupyter. Background sessions are reusable compute pinned to a
+project revision for unattended scenario and suite work.
 
-## The kernel loop
+Only interactive sessions can be selected for direct work. Read-only status
+and logs can inspect either kind.
 
-- `antioch jupyter start --json` starts one Isaac kernel on the assigned
-  machine and prints its identity (human mode prints the bare kernel id on
-  stdout for scripts). `--machine MACHINE` pins it.
-- `antioch jupyter cell 'print("ready")'` runs one cell and exits while the
-  kernel stays alive. Use `--kernel KERNEL_ID` to choose among several live
-  kernels; source can also come from stdin. `--timeout` bounds the cell
-  (default 900 seconds) — raise it before a long training or SDG cell rather
-  than losing the result.
-- `antioch jupyter kernels --json` lists live kernels with state and last
-  activity.
-- `antioch jupyter show KERNEL_ID` shows one kernel's state, stream ownership,
-  and next cell, stop, and stream command.
-- `antioch jupyter stop --json --kernel KERNEL_ID` shuts one kernel down and
-  releases its GPU memory and livestream lease.
-
-Cells own their boot, exactly like `antioch run` scripts: call `antioch.boot()`
-in an early cell, and keep `pxr`, `omni`, `carb`, `isaacsim`, and `isaaclab*`
-imports inside function bodies in any imported module.
-
-## Stream a kernel
-
-Declare the machine's livestream before the first cell boots Isaac:
+## Start and select a session
 
 ```bash
-antioch jupyter start
-antioch jupyter stream --kernel KERNEL_ID --json
-antioch jupyter cell --kernel KERNEL_ID 'antioch.boot()'
-antioch jupyter unstream --kernel KERNEL_ID --json
+antioch session start
+antioch session list
+antioch session status --session SESSION
 ```
 
-The first command prints `KERNEL_ID`.
+`session start` starts or reuses a compatible interactive session. Use
+profiles when optional supporting services are needed; inspect
+`antioch session start --help` for the current syntax.
 
-The machine has one lease. A streaming kernel and a streaming `antioch run`
-cannot fight over the same listener; repeating the same kernel claim is
-idempotent, while a different holder is refused. Release it with
-`antioch jupyter unstream --kernel KERNEL_ID`. Inside Mission Control,
-`jupyter stream` is how a kernel's Isaac GUI reaches the console's livestream
-pane (`mission-control.md`).
+A user holds one live interactive session at a time by default. Stop a
+session you do not need before starting another. When no compatible GPU
+capacity is available, the session waits and `antioch session status`
+shows its place in the queue.
 
-## Use local JupyterLab with a remote kernel
+`session start` stays attached, waits for readiness, and keeps the session
+alive while it waits.
 
-`antioch jupyter lab --no-open --verbose` runs JupyterLab locally against the
-assigned machine's kernel and prints the verified URL. Notebooks, scripts,
-and saves are ordinary local
-files, and Lab's terminal is a local shell. Only the kernel is remote and it
-outlives the Lab process. (Mission Control serves a hosted Lab through its
-own gateway instead — do not start one there by hand.) Start the development
-session separately when local
-edits should reach the running services:
+Every command that needs a session accepts `--session SESSION`. Without it,
+the CLI uses the session it last used in this worktree, then the sole live
+interactive session. The CLI stops on ambiguity.
+
+## Run a command in a service
 
 ```bash
-antioch services up --watch
-antioch jupyter lab --no-open --verbose
+antioch services exec python src/main.py
+antioch services exec python src/main.py --seconds 60
 ```
 
-`antioch jupyter lab` prepares `sim` and applies one sync before it opens. Keep
-`antioch services up --watch` running only when later local edits should continue
-reaching the container. Ctrl-C ends `services up --watch` but leaves the containers and
-declared ports running, so use `antioch services down` when the stack should stop. Closing
-the notebook or stopping Lab leaves the kernel warm until it is stopped or
-culled.
+`services exec` defaults to the simulator service, or the only
+active service when there is no simulator. Use `--service` to select a
+helper and repeated `--profile` options to enable authored profiles at startup.
+Exec starts or reuses an interactive session and streams output
+and exit status. A newly created session builds from the current project.
+With a matching local project, each command applies the target service's
+development watch rules once before execution; rebuild rules do not fire on
+that pass. Run `antioch services watch` to apply changes continuously during
+an edit loop. `--timeout` stops the command after
+that many seconds (default 900). The command requests the session's Isaac GUI
+stream by default; `--stream` states that request explicitly, and
+`--no-stream` runs the process headless and leaves the one session stream to
+another process. The flag sets `ANTIOCH_PROCESS_STREAM` to `1` or `0` in the
+process environment, and `antioch.start_simulation()` reads it.
 
-## Direct shells
+Exec preserves stdin and literal argv. It selects a PTY when local stdin and
+stdout are terminals and forwards resize events; `--tty` and `--no-tty` override
+that choice. A non-PTY command keeps stdout and stderr separate and receives
+EOF when local stdin ends. The CLI returns when the command exits without
+waiting for local input to close. Ctrl-C stops the exact remote process with
+bounded escalation; it does not release the session.
 
-The `antioch services ssh` command opens a PTY in `sim` by default — when the
-project has no sim service, name the service explicitly. It resolves an existing
-assignment but does not create a recorded run or retain results. Use
-`antioch services exec` for a finite diagnostic command; it has a 120-second
-ceiling, so use `antioch run --timeout SECONDS` for longer simulation code.
-Use `antioch machine ssh` for a VM-shell diagnostic. See
-`machines.md` for direct transfer and service selection.
+## Inspect an existing service
+
+```bash
+antioch services exec --session SESSION --service sim -- nvidia-smi
+antioch services logs --session SESSION SERVICE...
+antioch shell --session SESSION
+antioch services cp sim:/workspace/project/output.png ./output.png
+```
+
+With `--session`, these commands use that exact session. Without it, `exec`
+can start a session; logs, shell, and copy require an existing one.
+
+- `exec` runs a finite command and relays its output.
+- `logs` reads service entrypoint output.
+- `shell` opens an interactive PTY in one service.
+- `cp` requires exactly one endpoint in `SERVICE:PATH` form.
+
+Use the command help to select a supporting service or change timeout and
+output behavior.
+
+## Apply local development changes
+
+```bash
+antioch services watch
+antioch services restart
+```
+
+`watch` follows the manifest rules continuously. The available actions are
+`sync`, `sync+restart`, `sync+exec`, and `rebuild`. They update a live
+interactive session only. A rebuild rule captures the declared build context,
+skips an already verified build-key result, creates a new immutable project
+revision when needed, and advances the service after the replacement is
+healthy.
+
+`restart` restarts selected service processes in the same session. It does
+not create a new session.
+
+## Use named routes
+
+Declare the route in `antioch.yaml`, including its direction. Then bind it for
+the selected session:
+
+```bash
+antioch services ports
+antioch services ports --bind sim.viewer=127.0.0.1:8080
+antioch services ports --clear sim.viewer
+antioch services ports --serve
+```
+
+Use a bind for `client-to-service` routes. `--serve` forwards every mapped
+route on its loopback address to the session until you stop the
+command. Nothing forwards while `--serve` is not running.
+
+## Use Jupyter
+
+```bash
+antioch jupyter lab
+antioch jupyter cell 'print("ok")'
+antioch jupyter cell --stream 'import antioch; antioch.start_simulation()'
+antioch jupyter lab --stop
+```
+
+JupyterLab runs in the selected interactive session's remote simulator service
+on its reserved `jupyter` route; add `--session SESSION` to name another one.
+`jupyter cell` uses Jupyter REST and WebSocket APIs through that route, runs
+on the one live kernel, and starts a kernel when none is live; JupyterLab's
+own controls manage several. Jupyter never creates a session. Interrupt
+`antioch jupyter lab` or run `antioch jupyter lab --stop` to stop JupyterLab.
+Kernels start without the GUI stream. Pass `--stream` on the cell that calls
+`antioch.start_simulation()` when the user wants to watch its Isaac GUI; the
+declaration applies to that cell only, and `--no-stream` refuses the stream
+for a cell beside a streamed process.
+
+After `antioch.start_simulation()`, import a source-backed decorated scenario and make a
+**programmatic call**:
+
+```python
+from src.scenarios import falling_cube
+
+results = falling_cube(drop_height=4.5)
+```
+
+Inside an Antioch-managed session command, a programmatic call creates a saved
+scenario run. Outside managed compute, it remains local and temporary. Use
+`antioch scenario run` when the CLI must select and monitor the execution.
+
+Use `antioch jupyter --help` for Lab, cell, and kernel commands on the
+selected session.
+
+## Stop the session
+
+```bash
+antioch session stop --session SESSION
+```
+
+Stopping a session stops the services and removes the temporary file system.
+
+Once ready, an interactive session stops by itself after 15 minutes without a
+heartbeat. An attached CLI command renews the heartbeat, so this happens only
+when no command holds the session. The idle countdown does not run while the
+session is still waiting for compute.
+
+Use the webapp's
+**Usage** page for organization GPU, CPU, and memory totals.

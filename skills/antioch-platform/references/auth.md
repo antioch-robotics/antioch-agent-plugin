@@ -17,7 +17,7 @@ antioch auth login
   add `--json` to emit the resulting identity. Without `--org`, the command
   remains an interactive selector. The selected organization owns every run
   and asset created afterwards.
-- `antioch auth logout --json` removes the local login and machine access from this computer.
+- `antioch auth logout --json` removes the local login from this computer.
 
 ## Account settings
 

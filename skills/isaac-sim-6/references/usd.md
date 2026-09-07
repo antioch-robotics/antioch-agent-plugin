@@ -1,113 +1,69 @@
-# USD composition & stage authoring — Isaac Sim 6.0.1
+# USD composition and stage authoring
 
-Detail reference for the `isaac-sim-6` skill. All `pxr` imports belong inside
-function bodies (the lazy-import invariant) — snippets here assume they run
-inside a function with `stage` available.
+Use this for layers, references, transforms, instancing, and missing or
+overridden properties. Simulator imports remain inside functions.
 
-## Stage basics
+## Inspect before editing
 
-- Units: Isaac Sim stages are meters, Z-up (`metersPerUnit = 1.0`). Warehouse
-  shells and third-party assets are often authored in cm — check
-  `UsdGeom.GetStageMetersPerUnit(stage)` before placing, and wrap
-  mismatched assets in a scale xform rather than editing mesh data.
-- `/World` is the conventional root xform; put the `PhysicsScene` at
-  `/World/PhysicsScene`.
-- Always save the stage (`stage.GetRootLayer().Save()` or `Usd.Stage.Save`)
-  when the artifact is the deliverable — never assume an in-memory stage
-  survives.
+Read the stage's units, up-axis, default prim, layer stack, load rules, and
+edit target. A missing prim can come from an inactive prim, unloaded payload,
+variant selection, broken reference, or a wrong path.
 
-## Adding assets
+`/World` and a meter/Z-up stage are common conventions, not universal USD
+requirements. Referenced assets need explicit unit/up-axis conversion where
+their conventions differ. The asset reference explains measured placement.
 
-```python
-ref = stage.OverridePrim("/World/Robots/Carter_0")
-ref.GetReferences().AddReference(usd_path)
-xf = UsdGeom.Xformable(ref)
-xf.ClearXformOpOrder()
-xf.AddTranslateOp().Set(Gf.Vec3d(x, y, z))
-```
+Create edits in the intended layer. Prefer a placement wrapper or a deliberate
+override to clearing an asset's transform stack. `ClearXformOpOrder` can
+discard an authored scale/orientation that makes the referenced asset correct.
 
-Grid placement: `row, col = divmod(i, cols)`, `x = col * spacing`,
-`y = row * spacing`. Separation minimums: mobile robots 2 m between centers,
-arms 1.5x reach radius, aerial stagger altitudes >= 2 m.
+## Composition
 
-`stage.GetPrimAtPath(path)` returning an invalid prim means a case-sensitive
-path typo or a missing reference — audit before assuming the asset broke.
+The usual LIVRPS strength mnemonic is local opinions, inherits, variants,
+references, payloads, specializes. It helps orient an investigation; inspect
+the actual property stack to resolve a concrete conflict.
 
-## Composition arcs
+References compose another asset. Payloads allow deferred loading, but can
+also load eagerly under the stage's current load rules. Sublayers order the
+local layer stack; they are not another slot in the mnemonic.
 
-USD resolves conflicting opinions by strength order — **LIVRPS**, strongest
-first: **L**ocal (direct) opinions, **I**nherits, **V**ariantSets,
-**R**eferences, **P**ayloads, **S**pecializes. Sublayers are not a separate
-arc: they order the layer stack itself, with the root layer strongest.
+For an unexpected attribute value, inspect
+`attribute.GetPropertyStack(Usd.TimeCode.Default())` and the active edit
+target. Do not keep writing into a weaker layer and expect the result to win.
 
-- `reference` — graft an external asset; loads eagerly.
-- `payload` — like a reference but lazy: only loaded on demand. This is the
-  key to headless RL startup optimization (skip appearance payloads) — and the
-  *weaker* arc, so a direct opinion beats it.
-- `sublayer` — stack whole layers into the local layer stack; ordering
-  between layers decides, not the arc list.
-- `variantSet` — switchable configurations on a prim; stronger than the
-  references/payloads it sits above.
+## Structure at real boundaries
 
-If an edit "doesn't take effect", a stronger opinion is overriding it. Find
-who sets a property with the property stack:
+Use separate geometry, material, physics, and composition layers when they
+have separate owners or reuse needs. A small asset does not need a mandatory
+directory tree. Binary USDC can suit large arrays; USDA is useful for reviewed
+text edits. USDZ packaging has its own asset/localization constraints.
 
-```python
-attr = prim.GetAttribute("physics:mass")
-for spec in attr.GetPropertyStack(Usd.TimeCode.Default()):
-    print(f"  Layer: {spec.layer.GetDisplayName()} = {spec.default}")
-```
+Instance repeated assets where sharing is valid. Instance proxies are
+read-only; edit the source or de-instance only the part that needs unique
+state. A point instancer is not interchangeable with separately simulated
+articulations.
 
-## Layered asset structure (NVIDIA pattern)
+Skip appearance payloads only if the task does not need their geometry,
+sensors, or rendered evidence. Do not remove visual data from a vision task
+to make a memory check pass.
 
-One binary geometry crate plus hand-editable USDA layers, composed by an
-`interface.usda` entry point:
+## Bounds, transforms, and runtime state
 
-```
-{robot}/
-  interface.usda      <- entry point: composition arcs
-  payloads/
-    base.usda         <- hierarchy + xforms
-    geometries.usdc   <- mesh data ONLY (binary crate)
-    instances.usda    <- mesh + material + collider assembly
-    materials.usda    <- material defs (MDL bindings)
-    Textures/
-    robot.usda        <- Isaac robot schema metadata
-    Physics/
-      physics.usda    <- neutral USD physics (joints, masses)
-      physx.usda      <- PhysX-only tuning, sublayers physics.usda
-      mujoco.usda     <- MuJoCo-only tuning, sublayers physics.usda
-```
+Choose local or world bounds deliberately. Clear or rebuild transform/bounds
+caches after edits. Cache results can also become stale across simulation
+steps. USD state is not an independent query into the live physics backend;
+use the physics reference for authoritative runtime readback.
 
-Format rule: binary `.usdc` for raw mesh arrays (large, never hand-edited);
-`.usda` for everything else (diffable, agent-editable); `.usdz` only for
-single-file distribution.
+Validate transformed corners when placing rotated/scaled assets. Do not mix
+local offsets, world positions, and stage units in one translation formula.
 
-| Layer | Format | Why |
-|---|---|---|
-| `geometries.usdc` | usdc | mesh topology/points — size + load speed |
-| `base.usda` | usda | hierarchy, transforms — hand-editable |
-| `instances.usda` | usda | references meshes, collision approximation |
-| `materials.usda` | usda | MDL bindings, look-dev |
-| `physics/physx/mujoco.usda` | usda | frequent tuning surface |
-| `interface.usda` | usda | composition arcs, entry point |
+## Deliver the actual asset
 
-## Headless / RL optimization
+Save to an owned output path when a stage is the deliverable. Anonymous
+layers and in-memory edits do not survive process exit automatically.
+Check which layers were saved; saving the root alone does not prove that all
+referenced dependencies were packaged.
 
-The biggest startup and VRAM win: don't load appearance payloads. Physics
-only needs base + physics layers — skip `materials.usda` and `Textures/`.
-
-- Mark repeated assets instanceable (shared mesh data across envs).
-- Use `UsdGeom.PointInstancer` for large repeated sets (> 10K prims).
-- Keep layer count low: thousands of per-asset layers dominate stage-open
-  time; consolidate into a few library layers.
-
-## Debugging checklist
-
-| Symptom | Check |
-|---|---|
-| Edit ignored | property stack — higher-precedence layer overrides |
-| Prim missing | case-sensitive path; missing/broken external reference |
-| Wrong size | `metersPerUnit` mismatch (cm asset in m stage) |
-| Slow stage open | layer count > 1000; consolidate into library layers |
-| Broken refs hang load | audit `layer.GetExternalReferences()` for missing files |
+Open the delivered entry point in a fresh context and inspect dependencies,
+bounds, materials, and any required physics. Flattening the stage does not
+automatically embed external textures.

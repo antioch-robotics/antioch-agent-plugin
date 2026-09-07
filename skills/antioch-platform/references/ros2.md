@@ -1,127 +1,107 @@
 # ROS 2 and autonomy services
 
-The Isaac Sim base image includes the in-process ROS 2 Jazzy Python stack, so
-`import rclpy` works in a scenario, a native run, or a Jupyter kernel. The base
-does not promise the full `/opt/ros` command-line toolchain. Add C++ tooling,
-`colcon`, or extra message packages in the sim Dockerfile when the project
-needs them.
+Use this when connecting ROS nodes, enabling the Isaac bridge, or adding a
+supporting autonomy service. Preserve the user's graph, middleware, and topic
+contract; a discovery workaround is not proof of message delivery.
 
-## Declare the graph
+The engine bundles an in-process ROS 2 Jazzy Python stack. That does not
+promise a complete `/opt/ros` development toolchain. Put C++ tools, extra
+messages, and a built workspace in the service image when needed.
+Opt into `isaacsim.ros2.bridge` through `SimulationConfig.extensions` for
+Isaac bridge work.
 
-Autonomy containers are ordinary entries under `services`; `sim` is the
-reserved simulation service, and no other service may use an engine image:
+## Process and image boundaries
+
+A simulator service can have any name; `sim` is the generated default.
+Use its generated, versioned Dockerfile through `build: .` or an explicitly
+versioned engine image. Untagged engine image references are not a runnable
+example.
+
+Supporting services have their own command, dependencies, resources, and
+named routes. Two engine-backed services need explicit runner selection with
+`x-antioch: {runner: true}` on the intended simulator.
+
+Healthchecks and `antioch services exec` do not run an image's entrypoint
+initialization first. Source the ROS/workspace environment in the command
+when that image requires it. A healthcheck that merely prints "ready" or
+lists an empty topic graph does not prove the required nodes are serving.
+
+## Discovery is not data transport
+
+Service names resolve through Antioch's declared service routes. Do not rely
+on multicast or shared-memory discovery across isolated services.
+
+`ROS_DISCOVERY_SERVER` selects a Fast DDS discovery server, for example a
+configured `ros:11811` endpoint. `ROS_STATIC_PEERS` instead lists peer host
+addresses separated by semicolons; it is not an equivalent
+`service:discovery-port` setting. Supported variables depend on the selected
+RMW implementation.
+See [ROS discovery options](https://docs.ros.org/en/jazzy/p/rmw/generated/structrmw__discovery__options__s.html)
+and [Fast DDS environment variables](https://fast-dds.docs.eprosima.com/en/2.14.x/fastdds/env_vars/env_vars.html).
+The [Jazzy Fast DDS participant implementation](https://github.com/ros2/rmw_fastrtps/blob/jazzy/rmw_fastrtps_shared_cpp/src/participant.cpp)
+resolves each static peer as a DNS/IP host and lets Fast DDS choose participant
+ports; do not append a discovery-server port to that host name.
+
+A discovery server does not relay application data. DDS participants still
+need reachable data locators and ports. Declaring one discovery port alone
+does not make a cross-service ROS graph work. Validate actual publisher to
+subscriber traffic, including QoS and both directions, rather than treating
+`ros2 topic list` as acceptance.
+
+Use the same domain for nodes intended to communicate where the middleware's
+domain semantics apply; isolate independent graphs deliberately. Do not give
+every communicating node a different domain ID.
+
+## A declared bridge route
+
+A point-to-point bridge such as a project-configured Zenoh bridge can use one
+declared TCP route. Its image owns the bridge mode, ROS setup, endpoints,
+security, and topic allow-list. This manifest fragment only declares transport:
 
 ```yaml
 services:
-  sim:
-    build: .
-    environment:
-      ROS_DOMAIN_ID: "7"
-    depends_on:
-      ros: {condition: service_healthy}
-    watch:
-      - action: sync
-        path: .
-        target: /workspace/project
-  ros:
-    build: ./ros
-    healthcheck:
-      test: ["CMD", "bash", "-c", "source /opt/ros/jazzy/setup.bash && ros2 topic list"]
-      interval: 2s
-      timeout: 5s
-      retries: 15
+  bridge:
+    image: registry.example.com/robot/zenoh-bridge@sha256:<digest>
+    ports:
+      - name: ros2-zenoh
+        port: 7447
+        protocol: tcp
+        direction: client-to-service
 ```
 
-Healthchecks and `antioch services exec` run without the image entrypoint that
-sources `/opt/ros/jazzy/setup.bash`, so wrap every ROS command in `bash -c`
-with an explicit `source`, as above — a bare `ros2` probe fails with
-"executable file not found" on stock ROS images.
-
-Host networking and IPC default on every service, so DDS discovery works
-through localhost without a discovery server or a peer list. A service can
-opt out with an explicit supported value — `network_mode: none` or `bridge`,
-`ipc: private`, or a `service:NAME` namespace reference for deliberate
-sharing; `manifest.md` owns the complete value sets. A service needed only by
-selected runs can carry an auxiliary `profiles` value. Use `antioch services up --watch` for the live graph; it is
-foreground, and Ctrl-C leaves containers running until `antioch services
-down`. Queued runs use their saved service images, project files, and inputs
-without development watch rules.
-
-## Run the Nova Carter warehouse stack
-
-The documented warehouse launch file is absent from the installed
-`carter_navigation` package share directory on Jazzy. The package does ship
-the warehouse map and the Nav2 parameter file, so start Nav2 directly after
-you build and source the workspace:
+Replace the image placeholder with the project's actual published image.
+For a laptop bridge endpoint, start/select the session, bind the route, and
+keep the foreground forwarder alive:
 
 ```bash
-antioch services exec ros bash -lc 'source /opt/ros/jazzy/setup.bash && source /workspace/project/ros_ws/install/setup.bash && ros2 launch nav2_bringup bringup_launch.py map:=/workspace/project/ros_ws/install/carter_navigation/share/carter_navigation/maps/carter_warehouse_navigation.yaml params_file:=/workspace/project/ros_ws/install/carter_navigation/share/carter_navigation/params/carter_navigation_params.yaml use_sim_time:=True'
+antioch session start
+antioch services ports --bind bridge.ros2-zenoh=127.0.0.1:7447
+antioch services ports --serve
 ```
 
-This uses the files installed by `carter_navigation`. The path is not the
-source path. Keep the same `ROS_DOMAIN_ID` in the `sim` and `ros` services.
+Configure the laptop endpoint for `127.0.0.1:7447` using that bridge's release
+documentation. Only declared client-to-service routes are forwarded. Stop
+the owned forwarder when the task no longer needs it.
 
-RViz exits on a headless machine because there is no display. This is
-expected. It does not mean that Nav2 or Antioch failed. Use an interactive
-Antioch Isaac stream to see the simulator scene. For example:
+## Run and validate
+
+For a service whose image contains the required ROS installation:
 
 ```bash
-antioch run --stream src/main.py
+antioch services exec --no-stream --service ros -- bash -lc 'source /opt/ros/jazzy/setup.bash && ros2 run demo_nodes_cpp talker'
 ```
 
-Open the machine livestream in Mission Control. `antioch services exec` does
-not claim the stream. A Rerun view is available only when the running scenario
-or session logs Rerun data; the Nav2 process alone does not create that data.
+Use `--no-stream` for ROS-only commands so they do not claim the one Isaac
+GUI stream. Isaac WebRTC does not automatically provide an X display for
+arbitrary RViz processes.
 
-Nav2 also needs a TF tree that contains `map`, `odom`, and `base_link`. The
-bringup command does not create that tree. Until the simulator or robot driver
-publishes it, messages such as `frame "map" does not exist` and
-`Timed out waiting for transform from base_link to map` are expected. They
-describe missing robot TF, not a missing map file or an Antioch failure.
+Retrieve the installed launch files and package share paths before composing
+Nav2 bringup. Do not assume a private workspace, historical Carter launch
+file, or hard-coded installed path exists. Nav2 also needs the correct map,
+simulation clock, TF tree, sensors, odometry, and control interfaces.
 
-## Build a C++ workspace
-
-Put the ROS apt repository, compiler, `ros-dev-tools`, and required message
-packages in the Dockerfile. Then use the running sim service for an interactive
-build:
-
-```bash
-antioch services exec sim bash -lc 'source /opt/ros/jazzy/setup.bash && cd ros_ws && colcon build'
-```
-
-The workspace is under `/workspace/project`, so build products are visible to
-later commands in the live service. Keep generated `build`, `install`, and
-`log` directories out of the build context with `.dockerignore` and the
-`watch.ignore` list. For reproducible scenarios, put the toolchain in the
-Dockerfile and let Antioch build it; do not rely on an unrecorded
-interactive shell.
-
-## Code-level escape hatch
-
-`antioch.container()` remains useful for a short-lived helper that does not
-belong in the service graph. It starts and tears down a container inside the
-current run and can use the same host network:
-
-```python
-import antioch
-
-with antioch.container("ros:jazzy", ready=antioch.tcp_ready(9090)):
-    ...
-```
-
-Use `antioch.command_ready([...])` when readiness is a command rather than a
-port. Give parallel cases distinct container names, ROS domains, and ports;
-host networking makes those values machine-wide. Keep `reuse=True` only when
-cases are intentionally serialized and the adopted service is known to be the
-right one.
-
-## Common ROS boundaries
-
-- Keep `ROS_DOMAIN_ID` and every bound port unique when cases can share a
-  machine.
-- Gate on a service-specific readiness file or command when a shared port could
-  belong to a stale process.
-- Use `antioch services exec` or a scenario when a launch must be timed, streamed, or
-  recorded; `antioch services ssh` is a human shell and has no process record.
-- Put durable logs, metrics, and recordings in scenario artifacts. The output
-  directory is assignment scratch and is retrieved explicitly before release.
+Record task-specific readiness, message flow, timestamps, TF consistency, and
+controller outcome. Put a reproducible build in the image; an interactive
+`colcon build` is temporary development state. Keep generated build/install/log
+directories out of source sync, and retain logs and measurements as run
+artifacts when durable evidence is requested.

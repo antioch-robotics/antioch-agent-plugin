@@ -1,132 +1,78 @@
-# Suites: named scenario selections
+# Define and run suites
 
-A suite is an ordered union of selector clauses saved in `antioch.yaml`. Use a
-small suite for smoke checks and a broader one for acceptance; the definition
-is the selection, so a suite run does not take ad-hoc scenario filters.
+A suite is a named, repeatable selection of scenarios and cases. Define it in
+`antioch.yaml`:
 
 ```yaml
 suites:
-  smoke:
-    description: "Fast health checks"
-    select:
-      - paths: ["scenarios"]
-        tags: ["smoke"]
   acceptance:
-    description: "Warehouse acceptance matrix"
+    description: Warehouse acceptance checks
     select:
-      - paths: ["scenarios"]
-        tags: ["warehouse"]
-      - scenarios: ["pick_and_place"]
-        cases: ["nominal", "tight_clearance"]
+      - tags: ["warehouse", "smoke"]
+        exclude_tags: ["slow"]
+      - scenarios: ["dock_alignment"]
+        cases: ["narrow", "wide"]
 ```
 
-Fields inside one clause narrow together; clauses are unioned in authored
-order. Paths, scenario names, case ids, required tags, and excluded tags are
-exact selection inputs (`manifest.md` owns the clause schema). Validate the
-expanded catalog locally:
+Fields inside one selector all apply. Separate selectors form an ordered
+union. A selector can match paths, scenario names, case IDs, required tags,
+and excluded tags.
+
+## Preview before submission
 
 ```bash
-antioch suite collect --json
+antioch suite collect
 ```
 
-## Foreground suites
+Collection runs on the client. It shows the exact scenario and case expansion
+without starting remote compute. Fix an empty or unexpected selection before
+submission.
+
+## Submit the suite
 
 ```bash
 antioch suite run acceptance
 ```
 
-Foreground execution uses the project's assigned machine(s), streams by
-default, and returns a process verdict only after every selected scenario
-finishes. Use the machine, timeout, stream, and output options printed by
-`antioch suite run --help`; do not narrow the saved suite with scenario flags.
-To run a subset, use `antioch scenario run` with its selection flags.
+Antioch records the suite's selected inputs and immutable project revision.
+The suite groups child scenario runs in authored order. Interactive execution
+is serial on the selected session and stays attached until the suite
+finishes. `--detach --parallel N` can use up to `N` reusable background
+sessions. Closing the terminal after a detached submission does not cancel
+the suite.
 
-## Queued suites and reruns
+An attached suite requests the session's GUI stream by default, one child at a
+time, and shares `--stream/--no-stream` with `antioch scenario run`; a
+detached suite is headless. Mission Control can show the active stream.
+
+Use `antioch suite run --help` for the current output and follow behavior.
+
+## Read progress and results
 
 ```bash
-antioch suite run acceptance --queue --json
-antioch suite show SUITE_RUN_ID --follow --json
+antioch suite show SUITE_RUN_ID --json
+antioch suite show SUITE_RUN_ID --logs
+antioch suite summary
 ```
 
-For a queued suite, the submitter builds the selected project services on the
-project's checked-out machine, its sole assignment, or a new assignment, in
-that order. Queued dispatch does not accept `--machine`; use `machine checkout`
-when you need to select one of several assigned machines. Antioch adds the
-current project files to the simulation image,
-pulls private images with the local Docker credential, and pushes the resolved
-images into your organization's private registry. Antioch distributes the
-suite's scenario runs
-across other eligible machines.
-Queued workers are headless; development `watch`
-rules and `ports` tunnels are not part of the queued environment. Do not
-combine `--queue` with a typed `--stream`, `--verbose`,
-`--machine`, or `--machines`; `--json` on `suite run` requires `--queue`
-(`running.md` explains the constraints).
+The suite run links every selected scenario result. Read the failing
+scenario checks and service logs before you change the implementation. The
+webapp can compare runs from one suite.
 
-Queued runs save their exact service images, project files, and inputs before
-Antioch distributes them. For a single-machine interactive suite run, Antioch
-captures the files in the `sim` container and then attempts to save the exact
-images and files the suite run used. When that capture and
-publish succeeds, queue the completed suite again exactly as it ran:
+## Cancel or repeat a suite
 
 ```bash
+antioch suite cancel SUITE_RUN_ID
 antioch suite rerun SUITE_RUN_ID
 ```
 
-The webapp's Re-run button is the GUI twin of `suite rerun` and
-`scenario rerun`. Multi-machine interactive runs are not currently
-rerunnable. Repeat the
-original command or use `--queue` when the result must be rerunnable. Antioch
-explains when an older run or a failed source capture or publish leaves the
-environment unavailable.
+Cancellation signals active work and prevents unstarted work from beginning.
+Completed scenario evidence remains.
 
-Standalone scenario selections use the same queue boundary:
+A rerun gets a new ID and uses the original immutable project revision and
+exact inputs. It does not change the original suite, rebuild, or resolve
+mutable tags again. Exact inputs do not guarantee the same outcome or timing
+when scheduling, capacity, simulator timing, or external assets differ.
 
-```bash
-antioch scenario run --tag smoke --queue --json
-```
-
-That form creates standalone scenario runs rather than a named suite
-parent.
-
-## History and cancellation
-
-Use the read surfaces when a run id is not at hand:
-
-```bash
-antioch suite list --json
-antioch suite summary --json
-```
-
-Inside a project both default to that project; add `--all-projects` to widen
-the view. `suite summary` lists named suites with their latest-run state —
-the fastest answer to "how is the nightly doing". Use the `--cursor` returned
-by a JSON page to continue that same query. Cancel
-queued or running work by its suite-run id:
-
-```bash
-antioch suite cancel SUITE_RUN_ID --json
-```
-
-Suite list, summary, and show JSON include suite and scenario identities,
-project and dispatch provenance, lifecycle and outcome, child counters,
-timings, results, logs, artifacts, and rerun capabilities. Member records
-inside `suite show` use the same customer-facing schema as `scenario list`
-and `scenario show`.
-
-Finished member scenarios remain in the suite history; unclaimed queued runs are
-cancelled and active processes are signalled. Check `antioch suite cancel
---help` before automating cancellation and confirm the organization-wide impact.
-
-## Comparing suite runs
-
-The webapp's Compare view takes two to eight suite runs and shows pass rate,
-duration, and a scenario-by-scenario result matrix. The CLI has no `compare`
-command — the agent path is JSON: pull each run with
-`antioch suite show SUITE_RUN_ID --json` (its `scenario_runs` array carries
-every member's outcome and results) and diff the fields that matter.
-
-Suite `--phase` and `--outcome` filters are repeatable unions in both `list`
-and `summary`; every finite JSON result is one document and every `*_at` value
-is Unix microseconds. Followed JSON is explicit NDJSON. See `cli.md` for the
-shared contract and each command's `--help` for its current fields.
+Use `antioch suite delete --run SUITE_RUN_ID` only when the user explicitly
+wants to remove a suite run from history.

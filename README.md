@@ -1,293 +1,155 @@
 # Antioch Agent Plugin
 
-[Antioch](https://antioch.com) is the simulation platform for robotics and
-autonomy teams. The official Antioch Agent Plugin turns Codex or Claude Code
-into an expert simulation engineer that works from your existing repository.
+Guidance and research tools for agents working with
+[Antioch](https://antioch.com). The plugin helps an agent work in your existing
+project, write native Isaac code, run requested evaluations on remote compute,
+and inspect their recorded evidence. It does not install a simulator locally
+or make an untested simulation correct.
 
-Your agent can understand your robotics stack, research exact simulation APIs,
-write native Isaac code, and build repeatable Antioch scenarios. It can connect
-your autonomy services, robot and sensor models, and simulation assets; run
-evaluations across Antioch GPU machines; and use the recorded results to improve
-the implementation.
+## Capabilities
 
-## What your agent can do
+| Skill | Responsibility |
+|---|---|
+| `antioch-platform` | Project setup, service graphs, sessions, CLI workflows, assets, runs, suites, and Jupyter |
+| `antioch-research` | Search and inspect hosted, versioned vendor documentation and source |
+| `isaac-sim-6` | Isaac Sim 6.0.1 physics, USD, assets, sensors, navigation, manipulation, rendering, and datasets |
+| `isaac-lab-3` | Isaac Lab 3.0.0-beta2 environments, managers, controllers, and RL integration |
+| `scenario-design` | Cases, measured verdicts, artifacts, Rerun telemetry, and review layouts |
 
-- **Build in your project.** Inspect `antioch.yaml`, work with your existing
-  services and source, and author simulations without cloning the project onto
-  a remote VM.
-- **Research the simulation stack.** Search versioned documentation across
-  Isaac Sim, Isaac Lab, Omniverse and Kit, OpenUSD, PhysX, Newton, Warp, and
-  other supported libraries, plus pinned source where available.
-- **Run and evaluate simulations.** Start interactive work, use Jupyter, run
-  scenarios and suites, and fan evaluations across several Antioch machines.
-- **Reason from evidence.** Inspect outcomes, checks, logs, telemetry,
-  artifacts, and visualizations, then use that evidence for the next iteration.
+Research exposes six tools: `research_search`, `research_artifacts`,
+`research_expand`, `research_open`, `research_grep`, and `research_versions`.
+Call the version tool to see current coverage; documentation crawls and source
+pins are not interchangeable.
 
-The plugin does not install Isaac on your computer. Your code remains ordinary
-Python, while Antioch runs the simulator on a remote GPU machine.
+The plugin uses your existing Antioch identity. Research queries go to the
+hosted index; simulation dispatch and transport use the ordinary CLI/session
+interfaces. It bundles no agents that run independently of your harness.
 
-## Install Antioch
+## Prerequisites
 
-The plugin runs two programs from your shell: `antioch` for simulations and
-`antioch-research-mcp` for research. **Both must be on the `PATH` of the
-terminal you start the agent from.** That is the one requirement, and almost
-every setup problem is this requirement not being met.
-
-Install with [`uv`](https://docs.astral.sh/uv/getting-started/installation/):
+Both `antioch` and `antioch-research-mcp` must be on the PATH inherited by the
+agent. One installation provides both:
 
 ```bash
 uv tool install --python 3.12 antioch-sim
 uv tool update-shell
 ```
 
-This puts both programs on your `PATH` in every terminal, which is why it is
-the recommended install. Start a new shell, then sign in:
+Open a new terminal, then verify the programs and sign in if needed:
 
 ```bash
+which antioch antioch-research-mcp
 antioch auth login
 antioch auth whoami
 ```
 
-Before you start the agent, confirm both programs resolve:
+If your project already installs the SDK, activate its environment before
+starting the agent instead of installing another copy:
 
 ```bash
+source .venv/bin/activate
 which antioch antioch-research-mcp
 ```
 
-Two paths must print. If either prints nothing, the agent will not find the
-research server, so fix this first — see
-[The agent cannot find Antioch Research](#the-agent-cannot-find-antioch-research).
+These are shell examples for Linux/macOS. Use your shell's equivalent on other
+systems. Mission Control supplies its own identity and tools; do not replace
+that hosted login with a local login workflow.
 
-### If your project installs antioch-sim itself
+The plugin does not create an Antioch project by itself. See the
+[SDK setup guide](https://console.preview.antioch.com/docs/quickstart/install-the-sdk).
+A manifest needs services, but no service must be named `sim`. The simulator
+is selected from the engine-backed services, with an explicit runner marker
+when needed.
 
-Then the programs live in that project's virtual environment instead of on your
-global `PATH`. Activate it in the terminal **before** you start the agent, and
-skip the `uv tool install` above:
-
-```bash
-cd /path/to/my-sim
-source .venv/bin/activate      # Windows PowerShell: .venv\Scripts\Activate.ps1
-which antioch antioch-research-mcp
-```
-
-An agent started from any other terminal will not see them. A project that
-authors simulations must also select one supported engine extra. The
-[Antioch SDK guide](https://console.preview.antioch.com/docs/quickstart/install-the-sdk)
-covers project setup, engine selection, and your first run.
-
-## Install the plugin
-
-The commands below pin plugin version `v0.2.38`. To install the moving `main`
-branch instead, remove `#v0.2.38` from the Claude Code URL or remove
-`--ref v0.2.38` from the Codex command. A floating install can change without
-notice.
+## Install in your harness
 
 ### Claude Code
 
 ```bash
-claude plugin marketplace add antioch-robotics/antioch-agent-plugin#v0.2.38
+claude plugin marketplace add antioch-robotics/antioch-agent-plugin
 claude plugin install antioch@antioch
-```
-
-Confirm that the plugin and Antioch Research are available:
-
-```bash
 claude plugin details antioch@antioch
 claude mcp list
 ```
 
-Claude Code can show a new project MCP server as pending until you approve it.
-
 ### Codex
 
 ```bash
-codex plugin marketplace add antioch-robotics/antioch-agent-plugin --ref v0.2.38
+codex plugin marketplace add antioch-robotics/antioch-agent-plugin
 codex plugin add antioch@antioch
-```
-
-Confirm that the plugin is enabled and `antioch-research` appears in the MCP
-list:
-
-```bash
 codex plugin list --json
 codex mcp list --json
 ```
 
-Restart the agent after installation.
+These commands install from the public repository. For reproducible
+installation, choose an existing tag from the
+[public releases](https://github.com/antioch-robotics/antioch-agent-plugin/releases).
+Claude accepts `owner/repo#TAG` as the marketplace source; Codex accepts
+`--ref TAG` on marketplace add. A version in the development monorepo is not
+necessarily published.
 
-## Put the agent to work
+Restart the agent if the harness requires it to load new plugins. Tool approval
+and plugin visibility depend on the harness and its settings. For other
+Agent Skills-compatible harnesses, load this package's canonical `skills/`
+tree and register `.mcp.json` through that harness's supported mechanism.
 
-Start the agent from your project directory:
+## Use it
 
-```bash
-cd /path/to/my-sim
-codex                          # or: claude
-```
+Start from the project directory and give the agent a concrete task:
 
-If you installed with `uv tool install`, that is all you do — the programs are
-already on your `PATH`. If the project owns its own virtual environment,
-activate it in this terminal first, as described above.
+> Inspect this autonomy stack and design an obstacle-avoidance scenario.
+> Reuse the robot and services. Define measurable checks. Run one
+> representative case, then explain the saved result and any failed checks.
 
-Then give the agent a concrete robotics objective. For example:
+For a read-only task, say so:
 
-> Inspect this robotics stack and build an Antioch scenario for its obstacle
-> avoidance behavior. Reuse the existing autonomy services, robot model, and
-> sensors. Parameterize the obstacle layout and speed, define clear checks, run
-> representative cases across several machines, and use the saved telemetry and
-> artifacts to explain any failures.
+> Check this Isaac API against the runtime version and explain the failure.
+> Do not dispatch or change code.
 
-You can also ask the agent to:
+An API lookup can verify an interface; only a relevant runtime check can
+verify physical behavior. Review the agent's reported tests, run IDs, artifacts,
+failures, and unrun checks. The plugin tells agents to preserve that distinction
+and to keep failed samples as diagnostic evidence.
 
-- “Research the exact Isaac API this change needs, implement it, and validate
-  the result on Antioch.”
-- “Turn this working simulation into a parameterized scenario and a regression
-  suite.”
-- “Compare these suite runs and explain the failures from their recorded
-  evidence.”
+## Updates and removal
 
-The first research request can prompt you to approve the MCP server. A healthy
-installation can call `research_versions` and return the indexed corpus table.
+Upgrade an unpinned tool installation with `uv tool upgrade antioch-sim`.
+For project-owned dependencies, use the project's package manager instead.
+Check `antioch --version` in the same environment that starts the agent.
 
-## How it works
+Refresh the marketplace and update/reinstall the selected plugin through the
+harness's plugin commands. Inspect `--help` for that installed harness version.
+If the marketplace was pinned, select the new released tag explicitly.
+Do not remove unrelated plugins or MCP entries during an upgrade.
 
-The plugin gives the agent focused guidance for the Antioch platform, scenario
-design, Isaac Sim, and Isaac Lab. It also connects the agent to **Antioch
-Research**, which grounds API and implementation questions in versioned
-documentation and source instead of model memory.
-
-The agent uses your existing Antioch identity and works through the same local
-CLI as you. Simulation traffic does not pass through the research connection:
-the CLI connects directly to your Antioch machine, while the research server
-only queries Antioch's documentation and source index.
-
-Review the [complete agent guide](https://console.preview.antioch.com/docs/agents/work-with-agents)
-for project setup, example workflows, and guidance for reviewing autonomous
-simulation work.
-
-## Update
-
-If you installed the Antioch tools globally with `uv tool`, upgrade them first:
-
-```bash
-uv tool install --python 3.12 antioch-sim@latest
-antioch --version
-```
-
-Use `@latest`, not `uv tool upgrade`. `uv tool install antioch-sim` records the
-version you installed as a pin, and `uv tool upgrade` honours that pin: it
-prints a changed-package list and exits 0 while leaving the old version in
-place. Always read `antioch --version` afterwards rather than trusting the
-upgrade output.
-
-If the plugin uses an Antioch project environment instead, update
-`antioch-sim` with that project's package manager.
-
-Then refresh the marketplace and plugin.
-
-Claude Code:
-
-```bash
-claude plugin marketplace update antioch
-claude plugin update antioch@antioch
-```
-
-Codex — the marketplace was added at a pinned tag, so moving to a new version
-means removing it and adding the new tag. `codex plugin marketplace upgrade`
-refetches the pinned tag and reports success without changing anything, and
-adding the new tag over the old one is refused:
-
-```bash
-codex plugin marketplace remove antioch
-codex plugin marketplace add antioch-robotics/antioch-agent-plugin --ref v0.2.38
-codex plugin add antioch@antioch
-```
-
-Restart the agent after an update, then confirm the version actually moved
-before relying on the new guidance.
-
-## Remove
-
-Claude Code:
-
-```bash
-claude plugin uninstall antioch@antioch
-claude plugin marketplace remove antioch
-```
-
-Codex:
-
-```bash
-codex plugin remove antioch@antioch
-codex plugin marketplace remove antioch
-```
-
-Remove the separately installed Antioch tools only if no other project uses
-them:
-
-```bash
-uv tool uninstall antioch-sim
-```
-
-Run `antioch auth logout` if you also want to remove the local Antioch login.
+To remove this plugin, use `claude plugin uninstall antioch@antioch` or
+`codex plugin remove antioch@antioch`. Remove its marketplace only if no
+remaining installation needs it. The separate SDK installation and Antioch
+login remain until explicitly removed.
 
 ## Troubleshooting
 
-### The agent cannot find Antioch Research
+- **Executable missing:** verify PATH in the environment that launches the
+  agent. Activating a virtual environment in a different terminal does not
+  change an already-running agent.
+- **Plugin present, tools absent:** inspect the harness's plugin/MCP status
+  and pending approvals. A CLI list is not a successful research call;
+  ask the agent to call `research_versions`.
+- **Research authentication error:** inspect `antioch auth whoami` and follow
+  the returned login instruction. Do not switch organization/deployment to
+  hide the error. Hosted workspaces use their provided identity.
+- **Research service unavailable:** report the returned error. Official
+  source at the matching pin or checked-in types can provide a labeled
+  fallback, but are not live verification.
+- **Stale explicit MCP configuration:** inspect the configured executable
+  and plugin source. Remove an entry only after confirming it is obsolete
+  and obtaining permission; its mere presence does not make it wrong.
+- **Protocol error with an older SDK:** check the installed version and
+  server output, then update through the owning package manager. Do not
+  assume every connection failure has the same cause.
 
-The agent reports no research tools, or Antioch Research is absent from the MCP
-list entirely. **An absent server prints nothing at all**, so treat a missing
-line as this problem rather than as a healthy list.
+## License
 
-Run this in the same terminal you start the agent from:
-
-```bash
-which antioch-research-mcp
-```
-
-- **Nothing prints.** The agent cannot start a program it cannot find. Either
-  run `uv tool install --python 3.12 antioch-sim` followed by
-  `uv tool update-shell` and start a new shell, or activate the project virtual
-  environment that holds it. Then start the agent from that same terminal.
-- **A path prints, but the agent still shows no tools.** Restart the agent —
-  it reads the MCP list once at startup. Claude Code also holds a new server at
-  `⏸ Pending approval` until you approve it inside `claude`.
-
-An agent you started before installing Antioch keeps the old, empty list.
-
-### Antioch Research is listed but fails to connect
-
-Check the version first, because `uv tool install` pins a version and never
-upgrades on its own:
-
-```bash
-uv tool list                                      # look for the antioch-sim version
-uv tool install --python 3.12 antioch-sim@latest  # `uv tool upgrade` cannot move a pin
-antioch --version                                 # the only proof it moved
-```
-
-A stale entry in your agent's own configuration can also shadow the plugin's
-server. Codex keeps user-level servers in `~/.codex/config.toml`; a leftover
-`[mcp_servers.antioch-research]` there wins over the plugin's `.mcp.json` and
-survives every upgrade, even when it points at a path that no longer exists.
-Remove that block if it is present. `which antioch-research-mcp` cannot see
-this — it reports the working program while the agent runs the broken entry.
-
-A `-32602 invalid params` reply from `tools/list` is a defect in older
-`antioch-sim` releases: the server refused the optional pagination parameters
-that some clients send, which left that client holding no tools at all.
-Upgrading `antioch-sim` and restarting the agent resolves it.
-
-### Other problems
-- **Antioch Research reports that authentication is required:** run
-  `antioch auth login`, then retry the request.
-- **The plugin is installed but its guidance is absent:** restart the agent and
-  check `claude plugin details antioch@antioch` or
-  `codex plugin list --json`.
-- **The MCP server is not listed:** confirm that the plugin is enabled, then
-  reinstall it from the refreshed `antioch` marketplace.
-
-## License and attribution
-
-The plugin is licensed under Apache-2.0. Some Isaac Sim guidance is adapted
-from NVIDIA's Apache-2.0 Isaac Sim skills. See [`NOTICE`](NOTICE) for the exact
-attribution and upstream skill list.
+Apache-2.0. Isaac Sim guidance includes material adapted from NVIDIA's
+Apache-2.0 skills. [NOTICE](NOTICE) records attribution. Indexed research
+sources retain their own licenses.

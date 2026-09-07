@@ -1,30 +1,81 @@
-# Shared files: `antioch assets`
+# Work with assets
 
-An asset is a named, versioned file available across the organization — USDs, datasets, checkpoints. Names are path-like (`robots/commissioning-arm`) to group related files. Published versions are **immutable**.
+Assets are versioned robots, props, environments, datasets, checkpoints, and
+other reusable content. Organization members share the catalog. Search it before you
+create equivalent content.
 
-## CLI
+## Find an asset
 
-- `antioch assets list --json` — the team's assets **alongside Antioch's shared library**, each row tagged with its source. JSON list output is `{ "items": [...], "next_cursor": "..." }`; `-q` searches a name substring, `--cursor` continues a previous page and pins its query, and `--limit` is 1–200 (default 50).
-- `antioch assets show robots/commissioning-arm --json` — one asset with every version it has published. Addressed by **name or exact asset id** — name wins on collision.
-- `antioch assets push robot.usda --version v1 --description "Validated commissioning geometry"` — publishes one immutable version (`-n/--name` defaults to the file's own name; `-v/--version` is **required**; `--content-type` overrides media-type inference; `--preview preview.png` stores a preview beside the version; `--json`). Re-publishing the same name+version+content digest is an idempotent retry that repairs an interrupted upload; the same name+version with *different* content is refused with both digests. Text `.usda` and text-form `.usd` files with external `@asset@` or `@@@asset-with-@-characters@@@` references are refused because push sends one file; flatten the stage or publish a self-contained `.usdz`. Text inspection is bounded at 64 MiB. Binary `.usd`, `.usdc`, and `.usdz` files pass through the client without a dependency claim because it has no binary USD parser; `save_asset(source=...)` adds a pxr check inside a simulator when available.
-- `antioch assets pull robots/commissioning-arm --version v1 --output robot.usda` — downloads (`-v` defaults to the latest version, `-o` names the destination, `--preview` fetches the preview instead, `--force` overwrites an existing file) via signed URL straight from object storage. Prints the destination path; `--json` emits one transfer manifest for scripts.
-- `antioch assets verify robots/commissioning-arm --version v1` — downloads one version temporarily, verifies its SHA-256 digest, and scans text USD files for unpublished external dependencies. It exits nonzero when either check fails.
-- `antioch assets repair robots/commissioning-arm --json` — removes published versions whose file is missing after an interrupted upload; `-v` limits it to one version, and the default checks every published version. The JSON result names the versions removed and kept. Reach for it when `assets pull` or `verify` reports a missing file.
-- An organization asset **shadows** an Antioch-provided shared asset of the same
-  name. The organization's version wins in listings and name resolution, while
-  the shared asset stays addressable by exact ID. Names reserved on Antioch's
-  shared library cannot be reused for an organization asset.
+Every `-q` word must appear, in any order and any case, in an asset's name or
+description. Names are folder paths such as `robots/example`, so folder names
+are searchable too. This is a text search, not a directory filter:
 
-## From Python
+```bash
+antioch assets list -q "mobile robot" --json
+antioch assets list -q robots --json
+antioch assets show robots/example --json
+```
+
+Each listed entry carries `name`, `description`, `scope` (`tenant` or
+`shared`), `latest_version`, and `version_count`. `show` adds `versions`:
+each version's `content` carries `content_type`, `size_bytes`, and `sha256`;
+its `preview` is present when published. When several assets could fit,
+prefer the one whose description says what you need, and pin its version
+when you load it. Use `antioch assets list --help` for paging.
+
+The shelf stores no dimensions. To measure an asset, load it and read its
+bounds inside the scenario body. The result is in stage units, not necessarily
+meters; check the stage's `metersPerUnit` before converting it:
+
+```python
+from pxr import Usd, UsdGeom
+
+prim = antioch.load_asset("robots/example", prim_path="/World/Robot", version="v1")
+bounds = UsdGeom.BBoxCache(Usd.TimeCode.Default(), [UsdGeom.Tokens.default_]).ComputeWorldBound(prim)
+size_stage_units = bounds.ComputeAlignedRange().GetSize()
+```
+
+## Pull and verify
+
+```bash
+antioch assets pull robots/example --version v1 --output ./assets/example
+antioch assets verify robots/example --version v1
+```
+
+Transfers use signed links directly to object storage. Verification checks the
+stored published object's SHA-256 digest and rejects unresolved external
+references in supported text USD files. It does not read a local file.
+
+## Publish a version
+
+```bash
+antioch assets push ./robot.usdz --name robots/example --version v2
+```
+
+Asset versions are immutable. Repeating a publish with the same digest is an
+idempotent retry. The same name and version with different content is refused.
+Publish self-contained USDZ content. Flattening USD composition does not
+package textures or other external files. Load the Isaac Sim skill's
+`references/usd.md` for dependency packaging and validation before publishing.
+Use `antioch assets push --help` for version, description, media type, and
+preview input.
+
+If an interrupted publish left an asset version without content, inspect
+`antioch assets repair --help` and repair only the named asset.
+
+## Use assets in Python
 
 ```python
 import antioch
 
-prim = antioch.load_asset("robots/commissioning-arm", prim_path="/World/CommissioningArm", version="v1")
-asset = antioch.save_asset("robots/commissioning-arm", version="v2", source="robot.usda", description="Validated geometry")
+prim = antioch.load_asset("robots/example", prim_path="/World/Robot", version="v1")
+path = antioch.fetch_asset("datasets/example", version="v2")
 ```
 
-- `antioch.load_asset(name, *, prim_path, version=None) -> Usd.Prim` — downloads the version into the verified local cache and references it as **native USD** into the active stage at `prim_path`. The path must be absolute and unused (`ValidationError` otherwise); with no live stage it raises `StateError`; auth, cache, or USD failures raise `AssetError`. Antioch checks access before using cached bytes.
-- `antioch.fetch_asset(name, version=None) -> Path` — fetches a binary or text asset into the run-scoped verified cache for a framework loader; omitted versions resolve latest and log a pin hint; see the API docstring for the full contract.
-- `antioch.save_asset(name, *, version, source=None, description=None, content_type=None, preview=None) -> AssetRecord` — with `source` it publishes that file using the immutability rules from `assets push`; with `source=None` it **flattens the active stage** and packages it as a `.usdz` — the way a conversion or import scenario publishes a reusable result (the `isaac-sim-6` skill's assets references cover those workflows).
-- `antioch.lib.asset` is gone — all three functions live at the package root (`antioch.fetch_asset`, `antioch.load_asset`, and `antioch.save_asset`, plus `antioch.AssetError`).
+`antioch.load_asset` verifies and references native USD content into an active
+stage. `antioch.fetch_asset` returns a verified path for another framework
+loader. Pin a version in repeatable work.
+
+Publish a file or the flattened active stage with `antioch.save_asset`. Read
+the installed API docstring before use because the required version and
+preview behavior are part of the Python contract.

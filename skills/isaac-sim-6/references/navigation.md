@@ -1,169 +1,92 @@
-# Navigation — Isaac Sim 6.0.1 on Antioch
+# Navigation, maps, and mobile robots
 
-Detail reference for the `isaac-sim-6` skill.
+Use this for occupancy maps, route planning, wheel control, and legged policy
+integration. Match the method to the requested evidence: a rendered trajectory
+is not proof that a robot can drive it.
 
-Navigation code is authored locally (no simulator installed) and executed
-remotely on Antioch GPU machines running Isaac Sim 6.0.1 / Kit 110.1.2.
-Simulation commands can stream the remote GUI, but there is no local Kit or
-local stage. Verify navigation through recorded metrics, telemetry, and
-artifacts instead of relying on the viewport alone.
+## Choose the execution model
 
-Shared substrate lives elsewhere — point, don't duplicate: `SKILL.md` owns
-the lazy-import invariant, the 6.0 namespace map, boot/step/readback
-ordering, and the XformCache trap; `antioch-platform` owns dispatch. One
-scenario process per execution slot: there is no local Kit to kill and
-relaunch — fix the code and re-dispatch.
+- Physical navigation evaluates actuators, contacts, slip, balance, collision,
+  and the controller. Keep physics and obstacles active.
+- Kinematic replay is useful for visualization or replaying recorded sensor
+  poses. Label it as replay; teleporting a robot does not validate control.
+- A large stage is a reason to profile loading, collision cooking, and memory,
+  not to strip obstacle physics or silently switch the test to replay.
 
-## Module map (Isaac Sim 6.0.1)
+For differential and holonomic control, start from
+`isaacsim.robot.experimental.wheeled_robots`. Resolve wheel names and geometry
+from the actual asset. Check the controller's input units and output order;
+apply velocity targets to the matching joints, not guessed indices.
+A legged policy also depends on observation order, normalization, action
+scale, joint order, control period, and the robot version it was trained on.
 
-Never `omni.isaac.*`. Exact current paths:
+## Build the map in a declared frame
 
-| Capability | Module |
-|---|---|
-| Occupancy map from USD (extension-gated PhysX raycasts) | `isaacsim.asset.gen.omap.bindings._omap.Generator` after enabling `isaacsim.asset.gen.omap` |
-| Load ROS map.yaml + PNG | `isaacsim.replicator.experimental.mobility_gen.OccupancyMap` (package root) |
-| BFS path planner | `isaacsim.replicator.experimental.mobility_gen.impl.path_planner.generate_paths` |
-| Robot articulation | `isaacsim.core.experimental.prims.Articulation` |
-| Differential controller | `isaacsim.robot.experimental.wheeled_robots.controllers.DifferentialController` |
-| Holonomic controller | `isaacsim.robot.wheeled_robots.controllers.holonomic_controller.HolonomicController` |
-| RL policy execution | `isaacsim.robot.policy.examples.controllers.PolicyController` |
-| Physics lifecycle | `isaacsim.core.simulation_manager.SimulationManager` |
+Choose resolution, origin, bounds, vertical obstacle band, and unknown-space
+policy before generating a grid. Include collision geometry that can contact
+the robot over that height band; exclude a traversable floor without excluding
+low obstacles or overhangs that hit the body.
 
-## The navigation workflow
+The pinned occupancy generator is
+`isaacsim.asset.gen.omap.bindings._omap.Generator`. Retrieve its initialization,
+timeline/physics prerequisites, occupancy values, and buffer layout. Do not
+infer array orientation from a flattened buffer.
 
-1. **Get an occupancy map** — generate from the USD stage (two programmatic
-   paths below) or load a previously exported `map.yaml` pair.
-2. **Derive the robot footprint at runtime** — walk collider prims, never
-   hardcode dimensions. This also yields the Z-offset the spawn needs.
-3. **Plan and validate the path** — erode, plan, smooth, then validate every
-   smoothed waypoint with an oriented-footprint overlap check.
-4. **Choose the execution model** — physics, baked transforms, or per-frame
-   transforms, driven by stage weight and whether dynamics matter.
-5. **Drive the robot** — `DifferentialController`/holonomic on the
-   experimental `Articulation`, or an RL policy via `PolicyController`.
+A projection of USD bounding boxes is only an approximation. It can overfill
+hollow geometry, miss instance descendants, or mark an entire floor occupied.
+Use it only when that approximation fits the task, and inspect an asymmetric
+fixture with a known obstacle in one corner.
 
-## Occupancy maps — two programmatic paths
+## Footprint and clearance
 
-The GUI occupancy-map workflow does not exist here. Both paths are code.
+A world-aligned bounding box changes as the robot rotates. Do not rotate that
+box a second time as if it were the robot's local footprint. Measure the
+collision footprint in the robot frame and track the reference point used by
+the map and controller.
 
-| | Direct USD projection (first-class fallback) | Extension-gated `Generator` |
-|---|---|---|
-| Mechanism | Rasterize authored world AABBs onto a grid | PhysX raycasts over collision geometry |
-| Requires | Nothing — works pre-play, deterministic | Enable `isaacsim.asset.gen.omap`; colliders authored on obstacles; **timeline playing** |
-| Best for | Collider-less scenes, prototypes, placeholder geometry; live-proven fallback | When the optional extension loads and collision approximations are the source of truth |
-| Failure mode | Noise (shells, signage, floor markings) without filters | ModuleNotFoundError before enablement, or an all-free map with stopped timeline/missing colliders |
+- The **circumscribed** radius encloses the entire footprint and gives a
+  conservative circular approximation.
+- The **inscribed** radius fits inside it. For a rectangular robot, it omits
+  the corners and cannot certify clearance at every yaw.
+- Convert a required nonnegative clearance to grid cells with
+  `ceil(clearance_m / resolution_m)`. Rounding or flooring can under-inflate.
+- Reject any candidate footprint outside the map. Polygon rasterizers often
+  clip silently, which can turn an out-of-bounds pose into a false clear cell.
+- Treat unknown space according to the task's explicit policy, normally as
+  blocked when proving a collision-free route.
 
-Both paths produce the same grid; export it as ROS `map.yaml` + PNG, which
-`OccupancyMap.from_ros_yaml()` and the A* planner consume. Cell size, height
-band, and buffer sizing are decisions, not constants — full code and the
-sizing tables: `references/navigation-occupancy-maps.md`.
+A path must clear the swept footprint along its segments and rotations, not
+just at waypoints. Smoothing can introduce collisions; validate the smoothed
+path again. Grid validation is still an approximation, so confirm with the
+physical controller when physical navigation is the requested outcome.
 
-## Robot footprints — derive at runtime rather than hardcode
+For PhysX scene queries, check filter and callback semantics in the pinned
+API. Exclude the queried robot and explicitly classify the support surface.
+An "any overlap" callback can otherwise report the robot itself or its floor.
 
-Walk the articulation's collider prims and union their world-space AABBs —
-hardcoded dimensions silently break when the asset changes.
-The result carries four things the rest of navigation consumes: footprint
-size, **Z-offset** (how far the origin sits above the lowest collider),
-inscribed radius (safe at any yaw), and circumscribed radius (worst-case
-yaw). Full implementation: `references/navigation-footprints-planning.md`.
+## ROS map export
 
-- **Spawn at `z = ground + z_offset`.** A missing Z-offset is the #1
-  cause of "robot falls through the floor" / "feet pop above ground" — many
-  robots have their articulation origin well above ground contact (quadruped
-  ~0.7 m, humanoid ~1.0 m).
-- Erode the grid by the **inscribed** radius for planning; size the dilation
-  buffer as `circumscribed_radius + safety_margin` (margin table:
-  `references/navigation-footprints-planning.md`).
+ROS map metadata and image orientation must describe the same world frame.
+For an internal Cartesian grid where row zero is minimum world Y, flip rows
+once when writing an image whose top row is maximum world Y. Do not flip twice
+on load. Verify this with asymmetric obstacles and known world coordinates.
 
-## Path planning and validation
+For conventional trinary maps, encode free, occupied, and unknown distinctly
+and set matching `negate`, `occupied_thresh`, and `free_thresh` metadata.
+Do not map every nonzero value to occupied if one of those values means
+unknown. Preserve resolution and origin, including the origin's yaw.
 
-Keep the whole pipeline — skipping validation produces paths that look
-fine on the map but clip walls at runtime, especially rectangular robots
-cornering through aisles:
+Load the exported image/YAML through the actual downstream map reader and
+check several world-to-cell samples before driving. Merely counting occupied
+pixels cannot detect a vertical mirror or a wrong origin.
 
-1. Compute the footprint (size, z_offset, radii).
-2. Rasterize obstacles (0.10–0.25 m/cell typical).
-3. Binary-erode the free space with a circular kernel of
-   `inscribed_radius / resolution`.
-4. Plan over the eroded grid — `generate_paths` runs BFS from a start cell
-   (no goal) and returns a tree you `unroll_path(end)` on, good for
-   any-reachable-goal and SDG sampling; for goal-directed routing use a
-   plain heapq A* instead.
-5. Smooth (Catmull-Rom); assign each waypoint `yaw = atan2(dy, dx)`.
-6. **Validate every smoothed waypoint** with an oriented-footprint check —
-   PhysX `overlap_box` after sim init, or rotated-rectangle stamping against
-   the raster grid with no PhysX needed. Reject the path on any hit.
-7. One bad waypoint → snap to nearest navigable cell and re-validate.
-   Many bad → re-plan with a `circumscribed_radius` erosion kernel.
+## Route evidence
 
-Both overlap-check implementations: `references/navigation-footprints-planning.md`.
+Keep the planned route, actual base poses, minimum clearance, collision
+events, progress, and final goal error. For legged robots include falls and
+stability; for wheeled robots include stalls and slip where relevant.
+Use task-defined tolerances and a bounded timeout. A rendered route through
+walls or an endpoint reached by teleportation is a failed physical test.
 
-## Driving the robot
-
-| Robot | Controller |
-|---|---|
-| Differential drive (two wheel groups) | `DifferentialController(wheel_radius, wheel_base)` → per-wheel velocity targets on the experimental `Articulation` |
-| Holonomic / mecanum | `HolonomicController` with wheel positions/orientations extracted from the robot USD |
-| RL-trained (policy checkpoint) | `PolicyController` — load the policy at runtime, step it each physics tick |
-
-Set velocity targets **after** `play(commit=True)` — PhysX ignores
-pre-play commands (boot ordering: `isaac-sim-6`). Controller wiring,
-policy loading, and steering parameters: `references/navigation-controllers.md`.
-
-## Execution model on heavy stages
-
-| Model | How | Use when |
-|---|---|---|
-| Physics | Timeline playing, controller drives joints each step | Dynamics matter (contact, slip, policy rollouts) and the stage is light |
-| Baked timeSamples | Pre-compute the trajectory, write xform timeSamples, scrub timeline | Static playback of a known route on a light stage |
-| Per-frame transform | `set_world_poses()` along the trajectory, one step per frame | **Heavy stages (50K+ prims)** — the OOM-safe default |
-
-Two failure modes decide for you:
-
-- Physics on a stage with tens of thousands of rigid/collision bodies
-  **hangs**. Strip `RigidBodyAPI`/`CollisionAPI` from every non-robot prim.
-- Baked timeSamples + RT rendering on a 50K+ prim stage **OOMs the GPU**
-  (`VkResult: ERROR_OUT_OF_DEVICE_MEMORY`). Switch to per-frame transforms.
-
-Both patterns: `references/navigation-controllers.md`.
-
-## Gotchas — symptom → cause → fix
-
-- **Robot falls through floor or floats** → missing Z-offset →
-  `compute_robot_footprint`, spawn at `ground + fp["z_offset"]`.
-- **Map comes back all-free from `Generator`** → timeline not playing
-  (raycasts need it) or obstacles lack `CollisionAPI` → `play(commit=True)`
-  before `generate2d()`; else use direct projection.
-- **Map full of phantom obstacles** → direct projection over visual bboxes
-  without filters → iterate collider prims only, or apply skip lists +
-  geometric filters (see occupancy-maps reference).
-- **Path fine on map, robot clips a rack** → skipped pipeline steps 6–7 →
-  oriented-footprint-validate every smoothed waypoint.
-- **Sim hangs on a big warehouse stage** → physics authored on thousands of
-  static prims → strip non-robot rigid/collision APIs.
-- **`VkResult: ERROR_OUT_OF_DEVICE_MEMORY` mid-run** → baked transforms +
-  heavy stage → per-frame transform model.
-- **Pose reads never change while the robot moves** → reading authored USD
-  via `XformCache` instead of simulated state →
-  `Articulation.get_world_poses()` (the XformCache trap, `isaac-sim-6`).
-- **Velocity commands do nothing** → set before `play()` → set after
-  `play(commit=True)` (boot ordering, `isaac-sim-6`).
-- **A run hung or crashed** → nothing to recover locally; every Antioch
-  execution is a fresh process in its own slot → fix and re-dispatch with
-  `antioch scenario run` (`antioch-platform`).
-
-## References (load one level deep when needed)
-
-- `references/navigation-occupancy-maps.md` — `Generator` and direct-projection code,
-  collider-vs-visual filtering, height bands, resolution/buffer sizing
-  tables, ROS `map.yaml` + PNG export, coordinate conventions. Load when
-  generating or exporting an occupancy map.
-- `references/navigation-footprints-planning.md` — `compute_robot_footprint`,
-  reference-value sanity table, erosion/buffer math, A* + smoothing, and
-  both oriented-footprint overlap checks (PhysX and grid). Load when
-  planning or validating paths.
-- `references/navigation-controllers.md` — `DifferentialController` and
-  holonomic wiring on the experimental `Articulation`, steering parameters,
-  `PolicyController` loading, physics/baked/per-frame execution patterns,
-  GPU OOM avoidance. Load when driving the robot or choosing an execution
-  model.
+ROS bridge setup belongs to the platform skill's ROS 2 reference.
+MobilityGen record/replay belongs to `references/sdg.md`.

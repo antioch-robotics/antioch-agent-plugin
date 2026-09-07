@@ -1,6 +1,6 @@
 {
   "name": "antioch",
-  "version": "0.2.38",
+  "version": "0.2.67",
   "description": "Adds Antioch simulation engineering to Codex and Claude Code: build scenarios, run evaluations, inspect evidence, and research the simulation stack",
   "author": {
     "name": "Antioch"
@@ -29,7 +29,7 @@
     "defaultPrompt": [
       "Inspect this robotics stack and design an Antioch scenario to evaluate it.",
       "Research the exact simulation APIs this change needs, implement it, and validate it on Antioch.",
-      "Run this suite across Antioch machines and explain the failures from the recorded evidence."
+      "Run this suite on Antioch and explain the failures from the recorded evidence."
     ],
     "brandColor": "#FF634F"
   }
