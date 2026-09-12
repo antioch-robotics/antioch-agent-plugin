@@ -28,8 +28,9 @@ generated file to see the exact tag.
 local SDK and the remote engine image start on the same release.
 Do not write that line by hand and do not leave it
 untagged: an engine reference with no tag has no default and the build refuses
-it. Updating the local package does not rewrite an existing Dockerfile; change
-the tag when the project should move to a newer remote image.
+it. A package-manager upgrade does not rewrite an existing Dockerfile. Explicit
+`antioch project update` can update literal engine tags with the selected SDK;
+ordinary build and init behavior is unchanged.
 
 The simulator service is the one that uses an Antioch engine image or a
 Dockerfile that starts from one; the role follows the image, not the service
@@ -72,16 +73,19 @@ settings used for that run.
 
 Project source lives at `/workspace/project` for `image:` and `build:`
 services. Watch actions transfer edits into a live interactive session. A
-recorded scenario or suite run places the submitted project files at that same
-path. A rerun uses the saved image digests and exact inputs under a new run ID.
+background submission builds the current YAML independently. Dockerfile `COPY`
+must place source at that same path; there is no run source bundle. A rerun
+uses saved image digests and parameters under a new run ID. It does not preserve
+unbuilt interactive edits. An unsupported old runtime is refused before
+allocation, while its saved history remains readable.
 It does not promise the same outcome or timing when scheduling, capacity,
 simulator timing, or external assets differ.
 
 ## Update the project SDK
 
 ```bash
-uv lock --upgrade-package antioch-sim
-uv sync --compile-bytecode
+antioch project update --dry-run
+antioch project update
 antioch --version
 ```
 

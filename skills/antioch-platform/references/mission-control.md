@@ -7,7 +7,7 @@ The workspace is separate from the interactive and background sessions that
 run simulation services.
 
 The stage automatically plays one active scenario stream. When several
-scenarios are streaming, select a session in the Sessions pane. A scenario
+projects' sessions are streaming, choose the one to watch in the Sessions pane. A scenario
 reserves its session stream while its simulation process runs.
 
 ## Work in the hosted environment
@@ -36,7 +36,7 @@ telemetry, and artifacts. The evidence remains after its compute stops.
 The Agent terminal runs in the workspace. JupyterLab and its files are
 hosted in that temporary environment, while the Isaac kernel uses a separate
 interactive session. With the local CLI, `antioch jupyter lab` instead
-launches JupyterLab in the selected session's simulator service and forwards
+launches JupyterLab in the project's session's simulator service and forwards
 its declared route to a local browser. Those notebook files are in the
 session, not automatically on the user's computer.
 

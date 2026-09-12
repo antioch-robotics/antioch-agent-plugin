@@ -26,8 +26,6 @@ services:
       - action: sync
         path: .
         target: /workspace/project
-      - action: rebuild
-        path: Dockerfile
 ```
 
 The manifest needs at least one service. The simulator is a role of the image,
@@ -129,8 +127,8 @@ the services a session runs (a profile-gated service places nothing until its
 profile is active). This release runs one placement group per session and
 refuses a session that lands services on different nodes, naming both services.
 
-`antioch project topology` prints the resolved groups, node
-class, and requests for that selection. An omitted `resources.cpu` or
+`antioch project show` prints every declared service with its placement
+group, GPU class, and requests. An omitted `resources.cpu` or
 `resources.memory` is no request and no limit: the service can use all the
 compute of its machine. A declared value is what the service gets, placed with
 that much and capped at it, so a real robot's compute budget can be simulated.
@@ -197,7 +195,7 @@ TCP is the default protocol. UDP is also supported.
 - `service-to-client` means the service starts the connection to a listener
   registered by that client.
 
-Use `antioch services ports --help` to bind or clear routes. Route names and
+Use `antioch service ports --help` to bind or clear routes. Route names and
 service endpoints must be unique, and platform routes are reserved.
 
 ## Use watch for interactive development
@@ -217,7 +215,9 @@ watch:
     ignore: ["**/__pycache__/**"]
 ```
 
-`sync` copies the matching files to a target under `/workspace/project`.
+`sync` copies the matching files to `target`. A target must be
+`/workspace/project` or a path under it; the manifest refuses any other path
+at load, because the session's file transfer accepts nothing else.
 
 ### Sync, then restart
 
@@ -228,7 +228,8 @@ watch:
     target: /workspace/project/config
 ```
 
-`sync+restart` copies the files, then restarts that service.
+`sync+restart` copies the files, then restarts that service's process in the
+same container. It waits for a fresh authored health check, not cached Ready.
 
 ### Sync, then run a bounded command
 
@@ -244,25 +245,17 @@ watch:
 `sync+exec` requires a non-empty command and a timeout greater than zero and
 no more than five minutes.
 
-### Rebuild the service image
-
-```yaml
-watch:
-  - action: rebuild
-    path: Dockerfile
-```
-
-`rebuild` uses a project-relative path as its change trigger. When the path
-changes, Antioch captures the complete declared build context, builds the new
-image, and updates that service in the same session. It has no container
-target.
-
 Sync targets in one service cannot overlap. Each watch rule can use `include`
 and `ignore` patterns.
 
-Use `antioch services restart` when a change needs a manual service
-restart. A `build` service can use a rebuild rule for dependency changes. A
-published `image` service needs a new image reference and a new session.
+Use `antioch service sync` for a file-only pass over the selected services'
+sync rules. `antioch service restart` restarts the service process without
+replacing its container and waits for fresh authored health checks. A service
+with no effective command stays idle; restarting it does nothing.
+
+Changing any service image or dependency needs a fresh session. Update the
+Dockerfile or image reference, then run `antioch session new`. It replaces the
+project's current session with one that uses the new images.
 
 ## Pin content-addressed images
 
@@ -278,8 +271,9 @@ registry image to an Antioch-owned digest before a run uses it.
 Resolved image digests and run inputs are the repeatable identity. Project
 source lives at `/workspace/project` for both `image:` and `build:`
 services. Watch transfer keeps a live interactive session current. A
-recorded scenario or suite run places the submitted project files at that same
-path.
+background submission builds the current YAML independently; its Dockerfile
+must `COPY` the source to that path. No run source bundle is uploaded or restored.
+Reruns use pinned images and parameters, not unbuilt interactive edits.
 
 ## Define suites
 

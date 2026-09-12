@@ -78,16 +78,26 @@ backend and renderer now agree. Check the selected source of truth and frame.
 Choose timestep and solver settings for the task's speeds, contact geometry,
 masses, and accuracy. Use a convergence comparison when changing numerical
 settings: smaller timesteps or different solver budgets should not change the
-claimed result beyond its tolerance.
+claimed result beyond its tolerance. Know what one step call advances: the
+SDK requires `render_dt` to be an integer multiple of `physics_dt`, and with
+`physics_dt` the smaller of the two, `World.step(render=True)` advances
+`render_dt / physics_dt` physics steps while `World.step(render=False)`
+advances exactly one, so a loop that renders every N-th call advances more
+physics than N steps per N calls. Take simulated time from the engine —
+`run.sim_s`, or the physics dt times the physics callback count — never from
+an authored call counter.
 
 A universal three-second settle time, fixed iteration count, or maximum
 number of bodies is not a physical contract. Measure residual motion over a
 declared simulated interval and enforce a bounded wall-clock timeout.
 
 For contacts, verify sensor filters, reporting thresholds, force/impulse units,
-and sampling time. No report can mean a filter or reporting problem rather
-than no contact. For momentum or energy tests, account for gravity, damping,
-friction, actuators, and solver error before declaring an engine limitation.
+and sampling time. A contact reading taken over a render step is an impulse
+summed over `render_dt / physics_dt` substeps: divide it by the interval it
+was accumulated over, not by `physics_dt`. No report can mean a filter or
+reporting problem rather than no contact. For momentum or energy tests, account
+for gravity, damping, friction, actuators, and solver error before declaring
+an engine limitation.
 
 Do not replace contacts with analytical motion to make a physics test pass.
 A simplified model requires an explicit change in the requested evidence.

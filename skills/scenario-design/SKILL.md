@@ -1,6 +1,6 @@
 ---
 name: scenario-design
-version: "1.2.4"
+version: "1.3.8"
 description: >
   Teaches agents to design Antioch scenarios end to end — the `@antioch.scenario`
   unit and its `ScenarioRun` handle, declaring cases and parameters, modelling
@@ -17,9 +17,10 @@ description: >
 
 # Designing scenarios on Antioch
 
-A scenario is a 3D integration test written as a Python function. Antioch runs
-the function in a GPU session and keeps its inputs, pass/fail outcome, results,
-logs, telemetry, and artifacts together. A useful scenario gives an engineer
+A scenario is an evaluation written as a Python function. Antioch can dispatch
+it to a GPU session or record an ordinary caller-owned Python scope. Its inputs,
+pass/fail outcome, results, telemetry, and artifacts stay together. Managed
+runner execution also captures process output. A useful scenario gives an engineer
 enough evidence to understand what the robot did and why it passed or failed.
 
 The deep Rerun surface — blueprint constructors, entity-path rules, live
@@ -73,18 +74,35 @@ def vial_place(run: antioch.ScenarioRun, seed: int = 1) -> None:
 - Native scripts and notebooks start Kit themselves. A source-backed decorated
   scenario can be imported and used as a **programmatic call** after
   `antioch.start_simulation()`; the public callable omits the run and returns
-  `run.results`. Inside a managed session command, the call creates a saved
-  scenario run. Outside managed compute, results,
-  checks, and logging are transient, and `run.add_artifact(...)` is
-  unavailable. Keep `antioch.Scenario(...)` as a context manager for
-  an undecorated block. Never construct `ScenarioRun` directly.
+  `run.results`. Both managed execution and ordinary local/SSH calls save a
+  scenario run by default. For caller recording, run from a valid full Antioch
+  project manifest, including its service declaration, and existing user/PAT
+  auth. Decorated definitions need a real source file inside the project.
+  A `Scenario` context also works in a notebook cell or REPL with no file.
+  Source-free managed runs cannot be rerun from history; execute the context
+  again instead. No service is
+  built, allocated, or started. `config=None, capture=False` needs no simulator.
+  Use `antioch.Scenario(...)` for an undecorated context block; never construct
+  `ScenarioRun` directly. `Scenario(..., control=None)` is deliberately offline
+  and cannot upload artifacts. Missing auth/project or partial managed context
+  refuses instead of silently becoming offline.
+- Caller `recording_timeout_s`, on `Scenario` or `@scenario`, defaults to 900
+  seconds and must be finite, positive, and at most 86400 seconds. The window
+  includes publication and cannot renew. `run.raise_if_cancelled()` is a
+  cooperative checkpoint on the caller thread; finalization also observes
+  cancellation. There is no SDK worker or forced process stop. Deadline expiry
+  closes the record without proving that the Python process stopped. Caller
+  records have no revision and cannot use managed rerun or livestream. Failed
+  publication keeps local recovery files; a local file is not a saved artifact.
 - Use `profile="perception"` when the scenario needs auxiliary services from
-  that `antioch.yaml` profile; the frozen revision includes them.
+  that `antioch.yaml` profile during dispatch; the frozen revision includes
+  them. Direct Python calls do not activate profiles or restart services.
 - `restart_services=("autonomy",)` is background policy only. Antioch restarts
   those named services from the pinned project revision before each background
-  child and waits for health. Interactive execution ignores the declaration
+  child, without replacing containers, and waits for fresh authored health.
+  Interactive execution ignores the declaration
   because it is the user's live environment; the user chooses when to run
-  `antioch services restart`.
+  `antioch service restart`.
 
 ## A well-modelled scenario declares five things
 
@@ -181,7 +199,7 @@ ScenarioRun.add_artifact(path: str | Path, *, name: str | None = None, content_t
 - Results must be valid JSON and fit in the saved scenario results. Put the summary
   there, such as thresholds, counts, and aggregate error, and save a
   per-episode table as an artifact.
-- Artifacts upload directly from the service to object storage. Any media type
+- Artifacts upload directly from the Python process to object storage. Any media type
   is fine. Give each one a one-line `description` (at most 140 characters) saying
   what the file is — the console's download menu and `antioch scenario show`
   display it beside the name:
@@ -218,11 +236,12 @@ A run with no samples does not automatically have a useful dashboard:
 
 Capture rides the physics-step callback, never changes the run's outcome, and
 reports what it got at the end (`viewport telemetry captured N frames over
-X.Xs of simulation, N.N per second`). It warns when every frame is black,
-underexposed, overexposed, or nearly uniform. Those warnings diagnose the
-active viewport; they do not replace a scenario check. Turn platform capture
-off when a dedicated camera is the complete visual record, or when its cost is
-not justified:
+X.Xs of simulation, N.N per second`), naming on the same line the cadence
+ticks skipped while a read-back was pending and whether the 600-frame cap
+stopped it. It warns when every frame is black, underexposed, overexposed, or
+nearly uniform. Those warnings diagnose the active viewport; they do not
+replace a scenario check. Turn platform capture off when a dedicated camera is
+the complete visual record, or when its cost is not justified:
 `@antioch.scenario(capture=False)`, `Scenario(..., capture=False)`, or
 `ANTIOCH_TELEMETRY_CAPTURE=0`.
 
@@ -234,10 +253,13 @@ assets already exist in Kit.
 
 When visual review is required, emit an initial useful state after reset and
 camera setup: the authored image, any required drawable scene geometry, and
-baseline metrics. Then log again when the evidence changes. The scenario
-decides those moments; there is no required step count or telemetry cadence.
-If platform capture would record the uncontrolled camera before the owned
-camera is ready, aim it before the first rendered step or set `capture=False`.
+baseline metrics. Then log again when the evidence changes, and log every
+state change and the terminal state at the moment it happens, whatever the
+sampling cadence: a periodic-only sampler can miss the final `done`. The
+scenario decides those moments; there is no required step count or telemetry
+cadence. If platform capture would record the uncontrolled camera before the
+owned camera is ready, aim it before the first rendered step or set
+`capture=False`.
 
 ## Own the review camera
 
@@ -274,8 +296,9 @@ Pass a CPU-accessible RGB or RGBA array with shape `(height, width, 3 or 4)`
 to `Logger.image`, preferably `uint8` in `[0, 255]`. Alpha is discarded.
 Other dtypes are clipped and cast, not rescaled: convert known `[0, 1]` color
 samples to `[0, 255]` before logging, or they become nearly black. Copy GPU
-buffers to CPU explicitly. Keep raw depth, masks, and other measurement data
-in lossless artifacts; a colorized review image is a separate representation.
+buffers to CPU explicitly. Keep depth, masks, and other measurement data an
+evaluation reads back in lossless artifacts; what goes in the recording is
+the review representation.
 
 ```python
 logger.scalar("metrics/tilt_deg", tilt_deg)
@@ -283,14 +306,27 @@ logger.image("camera/bench", rgb)  # camera frames go here
 logger.value("metrics", {"error": error, "reward": reward})
 ```
 
-**Log pictures through `Logger.image`, never `logger.value(..., rr.Image(...))`.**
+**Log raw pixels through `Logger.image`, never `logger.value(..., rr.Image(...))`.**
 `image` downsamples and JPEG-compresses on the way in, the same compression
 the platform's own capture uses; a few hundred raw frames is the difference
 between an RRD somebody opens and one they give up downloading.
+The first normalized image fixes that entity's canvas for the recording.
+Later images fit that canvas without stretching, cropping, or enlargement;
+unused space is black. Use a new entity path for a separate camera canvas.
+
+`Logger.image` re-encodes whatever it is given, which changes a JPEG a CV
+service already produced. A frame that is already encoded goes through
+`logger.value(path, rr.EncodedImage(contents=jpeg_bytes, media_type="image/jpeg"))`
+unchanged, and metric depth goes through
+`logger.value(path, rr.DepthImage(depth_m, meter=1.0))`; the default layout
+gives each a 2D view. Depth is stored as raw floats, so sample it sparingly.
 
 Sample cameras at a rate a person would watch — a handful of frames per
 simulated second — and prefer more frames at a smaller size over a few
-enormous ones. Choose size and compression from the evidence needed, and measure the resulting file.
+enormous ones. Choose size and compression from the evidence needed, and
+read the size back: finalize logs `telemetry recording is 131.2 MiB, 2.2 MiB
+per simulated second`, and warns above 256 MiB, past which the default
+layout is not derived.
 
 Antioch stamps every write with `wall_time`, and with `sim_time` once Kit is
 running. One call is one sample at that current time; later calls do not fill
@@ -326,10 +362,15 @@ livestream by default and share `--stream/--no-stream`; a detached run is
 headless. Each scenario reserves the session's livestream while its simulation
 process runs, and the attached command shows progress until the run finishes.
 Inspect the recorded telemetry and artifacts after completion. A native script
-under `antioch services exec` and a Jupyter kernel use the same single
-livestream slot; `services exec` takes the same `--stream/--no-stream` pair,
+under `antioch service exec` and a Jupyter kernel use the same single
+livestream slot; `service exec` takes the same `--stream/--no-stream` pair,
 and a kernel must be assigned the stream before simulator startup. There is no
-stream size or rate field in simulation code or `antioch.yaml`.
+stream size or rate field in `antioch.yaml`. `SimulationConfig.renderer_quality`
+is the one picture control: its tier sets the stream budget and the browser
+fits its own window inside it, rounding to the encoder grid. Sensor camera
+resolutions stay independent. Streaming keeps the native
+60 FPS default, not a guaranteed delivery rate or a simulation timestep.
+Antioch has no FPS control. Use `extra_args` for native Isaac settings.
 
 ## Run it and read it back
 
@@ -338,7 +379,7 @@ antioch scenario collect                                   # discovery and schem
 antioch scenario run --scenario vial_place                  # one scenario, attached
 antioch suite run smoke                                    # a declared suite
 antioch scenario show SCENARIO_RUN_ID                      # verdict, checks, results, artifacts
-antioch scenario show SCENARIO_RUN_ID --logs               # captured output
+antioch scenario logs SCENARIO_RUN_ID                      # captured output
 antioch scenario download SCENARIO_RUN_ID                  # the .rrd and every artifact
 ```
 
@@ -349,10 +390,13 @@ to a scalar-only or simulator-free evaluation:
 1. `antioch scenario show SCENARIO_RUN_ID` — is the outcome the task's
    outcome, and does every criterion you meant to declare appear?
 2. Download required artifacts with `antioch scenario download SCENARIO_RUN_ID`.
-   For recorded telemetry, use `rerun rrd stats <file>` and
-   `rerun rrd print <file> | head` to inspect the expected entity paths and
-   sample timestamps. Simulation samples need `sim_time`; simulator-free
-   measurements use their available timeline.
+   Read the telemetry back with the same `rerun-sdk==0.36.0` the SDK pins:
+   `rerun rrd stats <file>` and `rerun rrd print <file> | head` from the
+   shell, `rerun.experimental.RrdReader` from Python, to inspect the expected
+   entity paths and sample timestamps. The dataframe API of older Rerun
+   releases and the DataFusion extra are not part of the pinned environment.
+   Simulation samples need `sim_time`; simulator-free measurements use their
+   available timeline.
 3. When images are evidence, decode them and apply the task-specific content oracle.
    Check timestamps and retained failure samples. Nonzero mean is not proof.
 4. When visual layout or playback is in scope, open the recording in the viewer.
@@ -360,9 +404,12 @@ to a scalar-only or simulator-free evaluation:
    it is the primary evidence; a requested 3D pane must draw geometry rather
    than empty axes. Report any viewer check that could not run.
 
-Native, scenario, and suite execution all use sessions. Attached scenario execution is serial on the selected live session;
+Managed native, scenario, and suite execution use sessions. Attached scenario execution is serial on the selected live session;
 ordinary headless service commands can run alongside it. Background work reuses revision-pinned
-background sessions. Scenario and suite records keep outcomes and evidence
+background sessions with automatic fan-out within quotas and capacity. Their
+source comes from Dockerfile `COPY`; there are no per-run source bundles.
+Reruns use pinned images and parameters, not unbuilt interactive edits.
+Scenario and suite records keep outcomes and evidence
 independently and never own session compute or usage.
 
 Deeper read-back — filtering run history, per-service logs, artifact keys,
@@ -379,7 +426,8 @@ result readback, not an invented visual workload.
 - [ ] `assert` / `run.fail` appear only where the run genuinely cannot continue.
 - [ ] Cases represent independent outcomes; internal loops retain required detail.
 - [ ] Thresholds are in `results`; per-episode detail is an artifact.
-- [ ] Camera frames go through `Logger.image`.
+- [ ] Raw camera frames go through `Logger.image`; pre-encoded JPEGs and
+      metric depth go through `Logger.value` as Rerun archetypes.
 - [ ] The review camera is aimed after reset, rendered, decoded, and validated
       before its frame is accepted.
 - [ ] A task-specific oracle proves the subject is in frame; mean/std only

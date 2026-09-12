@@ -1,6 +1,6 @@
 ---
 name: isaac-sim-6
-version: "1.1.5"
+version: "1.1.11"
 description: >-
   Guides Isaac Sim work in Antioch GPU sessions: scene and USD authoring,
   physics, sensors, asset import, navigation, manipulation, rendering, and
@@ -59,8 +59,7 @@ started app retains its own handle.
 | Field | Default | Contract |
 |---|---|---|
 | `log_level` | Engine default | `fatal/error/warning/info/verbose` |
-| `render_quality` | Engine default | `performance/balanced/quality/ultra` |
-| `viewport` | 1280×720 | Headless render size; a streamed process ignores it |
+| `renderer_quality` | `"balanced"` | The one picture control: `performance` (1920×1088 budget), `balanced` (2560×1440), `quality` (3840×2176) plus RTX startup settings |
 | `physics_dt` / `render_dt` | 1/60 each | Render period must be an integer multiple of physics period |
 | `physics_engine` | `"physx"` | `"newton"` selects the experimental Newton integration |
 | `extensions` | `()` | Extra extension IDs enabled before the first stage |
@@ -75,6 +74,36 @@ image and use `extra_args` for an extension search path if required.
 
 Attached and detached dispatch have different stream behavior. Use the
 platform skill rather than restating the whole CLI contract here.
+
+Streaming keeps the native 60 FPS default. Antioch has no FPS control;
+use `extra_args` for native Isaac settings. Displayed video FPS is measured
+delivery, not renderer updates or physics steps. Headless background work
+does not start the stream encoder. Retired `stream_fps` inputs are ignored
+with an `ANTIOCH-DEP-010` notice.
+
+`renderer_quality` is the one picture control and global RTX configuration,
+not a stream-only setting. Each tier sets a stream budget, the largest picture
+the encoder sends, and the RTX startup settings. `performance` allows 1920×1088
+with DLSS performance and disables reflections and translucency; `balanced`,
+the default, allows 2560×1440 with DLSS balanced; `quality` allows 3840×2176
+with DLSS quality mode and DLAA instead of DLSS upscaling. The browser keeps
+its own window shape, never requests more pixels than its screen has, and
+rounds to a 32-pixel grid, so the picture is pixel exact up to the budget. A
+stream boots at 1920×1088 and the native livestream resizes it. Headless work
+renders the main viewport at 1280×720; use `extra_args` native window settings
+to change it. Sensor camera resolutions, `physics_dt`, `render_dt`, and
+notebook idle updates remain independent. These settings can affect sensor
+render products that use them. The retired `ultra` value selects `quality`
+with an `ANTIOCH-DEP-012` notice: its frame generation stalled Kit beside an
+active camera annotator graph. A streamed process starts with Kit's docked
+panels hidden so the viewport fills the frame; the Window menu reopens them.
+Explicit native arguments win, and ordinary `carb.settings` or
+`SimulationApp.set_setting()` calls after startup stay untouched. Antioch
+never reapplies a preset after startup. Retired `render_quality`, `viewport`,
+and `stream_resolution` inputs emit shared `ANTIOCH-DEP-008`, `ANTIOCH-DEP-009`,
+and `ANTIOCH-DEP-013` notices and are discarded. None is an alias and no value
+is forwarded; a fixed stream size is no longer a setting. Unknown inputs still
+fail.
 
 ## Lazy imports
 
@@ -133,10 +162,20 @@ framework, apply runtime controls, and advance using that framework's step.
 With `antioch.world()` this is normally `world.reset()` followed by
 `world.step(render=True)` when rendered evidence is needed.
 
+One `World.step` call is not one physics step. With `physics_dt` smaller
+than `render_dt`, `World.step(render=True)` advances `render_dt / physics_dt`
+physics steps and `World.step(render=False)` advances exactly one, so a loop
+that renders every N-th call advances more physics than N steps per N calls.
+Count physics time from the engine — `run.sim_s`, or the world's physics dt
+times the physics callback count — never from an authored call counter. The
+SDK's config validator requires `render_dt` to be an integer multiple of
+`physics_dt`, which is what makes that ratio a whole number of steps.
+
 A physics scene must exist, but `/World/PhysicsScene` is not a required path.
 Kit app updates can advance a playing timeline; their count does not establish
-a chosen physics timestep. Do not mix app pumping, classic World stepping,
-and another framework's independent step loop without understanding ownership.
+a chosen physics timestep, and neither does a step-call count. Do not mix app
+pumping, classic World stepping, and another framework's independent step
+loop without understanding ownership.
 
 Read physics-backed state during simulation. Experimental
 `RigidPrim.get_world_poses()` returns batched Warp position/quaternion arrays.

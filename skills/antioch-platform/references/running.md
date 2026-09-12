@@ -2,17 +2,17 @@
 
 Choose the workflow from the evidence the task must produce.
 
-## Use `services exec` for one process
+## Use `service exec` for one process
 
 ```bash
-antioch services exec python src/main.py
+antioch service exec python src/main.py
 ```
 
-Use `antioch services exec` when stdout, stderr, and the process exit status are the
-complete result of a Python file. It starts or reuses a compatible interactive
-session and streams the process output. A newly created session builds from
-the current project. Use `services exec` for arbitrary commands or a named
-supporting service. For later edits, run `antioch services watch` separately so the
+Use `antioch service exec` when stdout, stderr, and the process exit status are the
+complete result of a Python file. It starts the project's session when none is
+live, uses the live one otherwise, and streams the process output. A newly created session builds from
+the current project. Use `service exec` for arbitrary commands or a named
+supporting service. For later edits, run `antioch service watch` separately so the
 manifest's watch rules update the live services. The command requests the
 session's Isaac GUI stream by default; `--stream` states that request
 explicitly. A session has one stream, so add `--no-stream` to run the process
@@ -25,11 +25,11 @@ the top level of a headless script exits 0 through Isaac's fast shutdown; use
 `sys.exit(n)`. A script that replaces `sys.excepthook` without chaining the
 previous hook takes that exit ownership with it.
 
-The interactive session stays useful between commands. Stop it only when the
+The interactive session stays useful between commands. Release it only when the
 edit loop is done:
 
 ```bash
-antioch session stop --session SESSION
+antioch session release
 ```
 
 ## Use a scenario for saved evidence
@@ -43,15 +43,17 @@ Use a scenario when the result needs checks, named results, logs, telemetry,
 artifacts, or later comparison. Collection runs locally. Dispatch records the
 selected inputs and resolved service image digests.
 
-The default command uses the selected interactive session and stays attached
-until the run finishes. Add `--detach` to submit work that continues after the
-terminal closes. Antioch uses reusable background sessions for that work.
-Watch rules are an interactive development feature and do not alter the saved
-scenario inputs.
+The default command uses the project's interactive session and follows until
+the run finishes. `--no-follow` returns after admission without changing that
+session or stream intent. `--detach` selects headless background compute, and
+`--follow` can wait for either mode. Antioch uses reusable background sessions for that work.
+A background submission builds the current YAML independently of the project's
+interactive session. Watch rules never run on background sessions. Source must
+be included by the Dockerfile; run submission sends no source bundle.
 
 Attached `antioch scenario run` and `antioch suite run` request the session's
 GUI stream by default and share `--stream/--no-stream` with
-`antioch services exec`; a detached run is headless. Each scenario reserves the
+`antioch service exec`; a detached run is headless. Each scenario reserves the
 session livestream while its simulation process runs. The attached command
 shows progress; Mission Control shows the live simulation.
 
@@ -63,9 +65,9 @@ antioch suite run acceptance
 ```
 
 A suite expands the selectors in `antioch.yaml` and groups the resulting child
-scenario runs in authored order. Interactive suites are serial on the selected
-session. `--detach --parallel N` can use up to `N` reusable background
-sessions. Closing the terminal after a detached submission does not stop the
+scenario runs in authored order. Interactive suites are serial on the project's
+session. `--detach` distributes work across reusable background sessions
+automatically, within your quota and available capacity. Closing the terminal after a detached submission does not stop the
 suite.
 
 ## Diagnose from saved state
@@ -74,22 +76,23 @@ Read the saved result before changing code or submitting another run:
 
 ```bash
 antioch scenario show SCENARIO_RUN_ID --json
-antioch scenario show SCENARIO_RUN_ID --logs
+antioch scenario logs SCENARIO_RUN_ID
 antioch suite show SUITE_RUN_ID --json
-antioch suite show SUITE_RUN_ID --logs
 ```
 
 The saved result tells you whether the failure came from admission, service
 startup, the scenario process, a check, cancellation, or artifact handling.
-Logs are grouped by service.
+`scenario logs` prints a finished run's saved output, shows a running run's
+current tail, and can follow it with `--follow`; read each suite member's
+output through its own scenario run ID.
 
 For an interactive failure, inspect the live session and then reach the
 affected service:
 
 ```bash
-antioch session status --session SESSION --json
-antioch services logs --session SESSION SERVICE...
-antioch services exec --session SESSION --service sim -- nvidia-smi
+antioch session status --json
+antioch service logs SERVICE...
+antioch service exec --service sim -- nvidia-smi
 ```
 
 Confirm identity and version last:
@@ -109,8 +112,9 @@ antioch scenario rerun SCENARIO_RUN_ID
 antioch suite rerun SUITE_RUN_ID
 ```
 
-A rerun has a new ID. It uses the saved immutable project revision and exact
-inputs. It does not rebuild, resolve mutable tags again, use later local edits,
+A rerun has a new ID. It uses the saved immutable project revision and
+parameters. Unbuilt interactive edits are not preserved. It does not rebuild,
+resolve mutable tags again, use later local edits,
 or use a development watch transfer. Exact inputs do not guarantee the same
 outcome or timing: scheduling, capacity, simulator timing, and external asset
 availability can differ. Check catalog assets before rerunning and compare the

@@ -21,7 +21,7 @@ Supporting services have their own command, dependencies, resources, and
 named routes. Two engine-backed services need explicit runner selection with
 `x-antioch: {runner: true}` on the intended simulator.
 
-Healthchecks and `antioch services exec` do not run an image's entrypoint
+Healthchecks and `antioch service exec` do not run an image's entrypoint
 initialization first. Source the ROS/workspace environment in the command
 when that image requires it. A healthcheck that merely prints "ready" or
 lists an empty topic graph does not prove the required nodes are serving.
@@ -70,13 +70,13 @@ services:
 ```
 
 Replace the image placeholder with the project's actual published image.
-For a laptop bridge endpoint, start/select the session, bind the route, and
+For a laptop bridge endpoint, start the project's session, bind the route, and
 keep the foreground forwarder alive:
 
 ```bash
-antioch session start
-antioch services ports --bind bridge.ros2-zenoh=127.0.0.1:7447
-antioch services ports --serve
+antioch session new
+antioch service ports --bind bridge.ros2-zenoh=127.0.0.1:7447
+antioch service ports --serve
 ```
 
 Configure the laptop endpoint for `127.0.0.1:7447` using that bridge's release
@@ -88,7 +88,7 @@ the owned forwarder when the task no longer needs it.
 For a service whose image contains the required ROS installation:
 
 ```bash
-antioch services exec --no-stream --service ros -- bash -lc 'source /opt/ros/jazzy/setup.bash && ros2 run demo_nodes_cpp talker'
+antioch service exec --no-stream --service ros -- bash -lc 'source /opt/ros/jazzy/setup.bash && ros2 run demo_nodes_cpp talker'
 ```
 
 Use `--no-stream` for ROS-only commands so they do not claim the one Isaac

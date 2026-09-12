@@ -26,7 +26,7 @@ antioch scenario run --scenario falling_cube --set drop_height=4.5
 Use `antioch scenario run --help` for case, tag, path, and output selection.
 The command validates the selection before it submits a run.
 
-By default, scenario execution uses the selected interactive session and stays
+By default, scenario execution uses the project's interactive session and stays
 attached until the run finishes. Add `--detach` for unattended execution on
 reusable background sessions. The scenario record stays independent of the
 session and retains its result after that session stops.
@@ -40,7 +40,7 @@ runs; Mission Control can show that stream.
 
 ```bash
 antioch scenario show SCENARIO_RUN_ID --json
-antioch scenario show SCENARIO_RUN_ID --logs
+antioch scenario logs SCENARIO_RUN_ID
 antioch scenario download SCENARIO_RUN_ID
 ```
 
@@ -73,7 +73,8 @@ Cancellation records a terminal result and signals active work. Completed
 evidence remains.
 
 A rerun receives a new ID and uses the original immutable project revision and
-exact inputs. It does not replace the original run, rebuild, resolve mutable
+parameters. Unbuilt interactive edits are not preserved. It does not replace
+the original run, rebuild, resolve mutable
 tags, or use current local files. This preserves submitted inputs, not
 execution conditions: scheduling, capacity, simulator timing, and external
 asset availability can change, so a rerun can have a different outcome or

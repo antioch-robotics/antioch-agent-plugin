@@ -48,8 +48,14 @@ logger.image("camera/front", rgb)
 ```
 
 These produce `/robot/metrics/speed_mps` and `/robot/camera/front`.
-Use `Logger.image` for bounded, JPEG-compressed visual review. Raw tensors or
-lossless data needed by an evaluation belong in a separate artifact.
+Use `Logger.image` for raw pixels: it downsamples and JPEG-compresses them
+for bounded visual review, and re-encodes whatever it is given. A frame a CV
+service already encoded goes through
+`logger.value(path, rr.EncodedImage(contents=jpeg_bytes, media_type="image/jpeg"))`
+unchanged, and metric depth through
+`logger.value(path, rr.DepthImage(depth_m, meter=1.0))`; the default layout
+gives each a 2D view. Raw tensors or lossless data needed by an evaluation
+belong in a separate artifact.
 
 A logging call writes a sample now; it does not backfill earlier time or
 discover geometry from USD. The recording has `wall_time` and adds
@@ -57,8 +63,10 @@ discover geometry from USD. The recording has `wall_time` and adds
 before the first sample or after logging stopped.
 
 Log an initial useful review state after setup, then sample at a cadence that
-captures relevant motion. Explain setup gaps. Keep diagnostic failed frames
-with their checks instead of deleting them from the record.
+captures relevant motion, and log each state change and the terminal state
+when it happens, whatever the cadence: a periodic-only sampler can miss the
+final `done`. Explain setup gaps. Keep diagnostic failed frames with their
+checks instead of deleting them from the record.
 
 ## Geometry and frames
 
@@ -109,15 +117,19 @@ state only for a deliberate review need, such as process latency on
 | 3D axes but no subject | Drawable archetype and contents selector, then transform frames |
 | Blueprint missing | Active-run setter, entity paths, replacement semantics, and frame IDs |
 | No viewport samples | Capture disabled, no physics steps, frame limit, or capture failure logs |
-| Fewer frames than expected | Simulated duration, capture cadence/cap, render readiness and timestamps |
-| RRD too large | Raw image logging, oversized geometry, or unnecessary sample rate |
+| Fewer frames than expected | Simulated duration, the skipped ticks and cap named on the capture line, render readiness and timestamps |
+| RRD too large | The finalize size line and its rate per second, raw image logging, oversized geometry, or unnecessary sample rate |
 
 Automatic viewport capture is a bounded diagnostic sampler, not video and
 not an outcome oracle. Warnings about black, overexposed, or stopped capture
 do not fail the scenario. Use a named task check when visual content matters.
 
 After a requested run, use `antioch scenario show SCENARIO_RUN_ID` and
-`antioch scenario download SCENARIO_RUN_ID`. Inspect RRD statistics and
-sample timestamps, decode the primary image, and open the layout when visual
-review is in scope. Report what was checked, including any viewer or runtime
-step that could not run.
+`antioch scenario download SCENARIO_RUN_ID`. Read the file back with the
+pinned `rerun-sdk==0.36.0` the SDK installs: `rerun rrd stats <file>`,
+`rerun rrd print <file>`, and `rerun.experimental.RrdReader` from Python.
+The dataframe API of older Rerun releases and the DataFusion extra are not
+part of the pinned environment. Inspect statistics and sample timestamps,
+decode the primary image, and open the layout when visual review is in
+scope. Report what was checked, including any viewer or runtime step that
+could not run.

@@ -4,7 +4,9 @@ Guidance and research tools for agents working with
 [Antioch](https://antioch.com). The plugin helps an agent work in your existing
 project, write native Isaac code, run requested evaluations on remote compute,
 and inspect their recorded evidence. It does not install a simulator locally
-or make an untested simulation correct.
+or make an untested simulation correct. Interactive guidance uses immutable
+sessions: sync files, restart processes, and start a fresh session for image
+changes. Background work builds the same Dockerfile and runs within quotas.
 
 ## Capabilities
 
@@ -25,73 +27,44 @@ The plugin uses your existing Antioch identity. Research queries go to the
 hosted index; simulation dispatch and transport use the ordinary CLI/session
 interfaces. It bundles no agents that run independently of your harness.
 
-## Prerequisites
+## Install and inspect setup
 
-Both `antioch` and `antioch-research-mcp` must be on the PATH inherited by the
-agent. One installation provides both:
-
-```bash
-uv tool install --python 3.12 antioch-sim
-uv tool update-shell
-```
-
-Open a new terminal, then verify the programs and sign in if needed:
+After the selected deployment and a paired SDK support setup, use one command:
 
 ```bash
-which antioch antioch-research-mcp
-antioch auth login
-antioch auth whoami
+antioch setup
+antioch setup --dry-run
 ```
 
-If your project already installs the SDK, activate its environment before
-starting the agent instead of installing another copy:
+Setup installs the deployed SDK and its exact paired plugin for every Claude
+Code or Codex client on PATH; a host without an agent gets only the SDK. The SDK
+supplies both `antioch` and `antioch-research-mcp`. Keep those programs on the
+PATH inherited by the agent. An explicit existing `--python .venv/bin/python`
+targets a project environment instead of a global uv tool. Setup never edits a
+shell profile.
 
-```bash
-source .venv/bin/activate
-which antioch antioch-research-mcp
-```
+Production is the default. `ANTIOCH_ENV=staging` selects staging, as it does
+for every antioch command. Setup verifies one
+release pair, not independent latest SDK and plugin versions. It never signs
+in. After installing, it always checks existing sign-in and a real Research
+call, and a failed check exits 1 with the exact next step.
 
-These are shell examples for Linux/macOS. Use your shell's equivalent on other
-systems. Mission Control supplies its own identity and tools; do not replace
-that hosted login with a local login workflow.
+Older production metadata can require authentication, and older public SDKs
+have no plugin binding. Setup reports this rollout gap before installation.
+A fresh `uvx --from antioch-sim antioch setup` works only after a
+setup-capable SDK is normally published. Before that, the usable public
+bootstrap is SDK-only: `uv tool install --python 3.12 antioch-sim`. It is not
+proof of a verified plugin pair. Ask your staging operator for the exact
+approved private SDK bootstrap when public PyPI has no setup-capable release.
 
-The plugin does not create an Antioch project by itself. See the
-[SDK setup guide](https://console.preview.antioch.com/docs/quickstart/install-the-sdk).
-A manifest needs services, but no service must be named `sim`. The simulator
-is selected from the engine-backed services, with an explicit runner marker
-when needed.
+Restart the agent if its harness needs that to load a plugin. Inspect native
+plugin/MCP status and approvals; an installed plugin is not proof that Research
+is reachable. Ask the agent to call `research_versions` when that check is
+within the task.
 
-## Install in your harness
-
-### Claude Code
-
-```bash
-claude plugin marketplace add antioch-robotics/antioch-agent-plugin
-claude plugin install antioch@antioch
-claude plugin details antioch@antioch
-claude mcp list
-```
-
-### Codex
-
-```bash
-codex plugin marketplace add antioch-robotics/antioch-agent-plugin
-codex plugin add antioch@antioch
-codex plugin list --json
-codex mcp list --json
-```
-
-These commands install from the public repository. For reproducible
-installation, choose an existing tag from the
-[public releases](https://github.com/antioch-robotics/antioch-agent-plugin/releases).
-Claude accepts `owner/repo#TAG` as the marketplace source; Codex accepts
-`--ref TAG` on marketplace add. A version in the development monorepo is not
-necessarily published.
-
-Restart the agent if the harness requires it to load new plugins. Tool approval
-and plugin visibility depend on the harness and its settings. For other
-Agent Skills-compatible harnesses, load this package's canonical `skills/`
-tree and register `.mcp.json` through that harness's supported mechanism.
+Mission Control supplies its own tools and identity. Do not replace its hosted
+login or toolchain with a local setup workflow. Setup does not create a project
+or start a simulation session.
 
 ## Use it
 
@@ -113,14 +86,24 @@ and to keep failed samples as diagnostic evidence.
 
 ## Updates and removal
 
-Upgrade an unpinned tool installation with `uv tool upgrade antioch-sim`.
-For project-owned dependencies, use the project's package manager instead.
-Check `antioch --version` in the same environment that starts the agent.
+Run `antioch setup` again to update the SDK and plugins to the deployed
+release; `antioch setup --dry-run` shows the plan first. Use
+`antioch project update --dry-run` and then `antioch project update` in a uv
+project to update its active direct SDK dependency, lock and environment, and
+literal engine image pins; changed Dockerfile pins build through the normal
+revision path unless you pass `--no-build`. Neither command starts or alters a
+running session. Optional/group-only SDK selection needs an explicit
+interpreter. A dry run makes no installation or configuration changes; native
+clients can still write their ordinary inspection logs. Unrelated plugins and
+MCP entries are preserved.
 
-Refresh the marketplace and update/reinstall the selected plugin through the
-harness's plugin commands. Inspect `--help` for that installed harness version.
-If the marketplace was pinned, select the new released tag explicitly.
-Do not remove unrelated plugins or MCP entries during an upgrade.
+Text and JSON distinguish `mode: plan` from `mode: apply`. Components report
+`current`, `planned`, or `changed`; the agent map lists every agent on PATH. A
+current plugin on a dry run is installed, not newly configured by that read.
+Project sync and build actions report `planned`, `completed`, or `skipped`
+separately: a completed uv sync need not change files or the SDK, and
+`--no-build` cannot prove a build. Read those component results, not an
+aggregate configured flag or a command trace.
 
 To remove this plugin, use `claude plugin uninstall antioch@antioch` or
 `codex plugin remove antioch@antioch`. Remove its marketplace only if no
