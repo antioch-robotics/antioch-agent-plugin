@@ -1,93 +1,125 @@
-# Select the SDK and runtime images
+# Project environment
 
-The local SDK supplies the `antioch` Python package, CLI, and editor stubs. It
-does not install Isaac. Remote service images supply the simulator and other
-runtime dependencies.
+## Select and inspect
+
+Read the owning `antioch.yaml`, Python dependencies/lock, Dockerfile, and
+ignore rules. Check the project's interpreter and SDK, not only the global
+CLI. Preserve deliberate pins and the selected deployment.
+
+`antioch version --json` reports component versions. Production is the
+default; `ANTIOCH_ENV=staging` selects staging. MCP executables resolve on
+the agent's launch PATH: activating a shell environment later does not switch
+an already-running adapter.
+
+Use `antioch --help` for command groups and leaf help for flags.
+`antioch project list --json` finds registered organization projects;
+`antioch project show --json` combines local configuration with registry
+information. These need authentication. Private source-image credentials use
+`antioch project registry`; inspect its help before a requested login change.
 
 ## Create a project
 
-Choose one engine extra for the local project:
+For authorized authoring in an empty directory, choose the selected SDK
+release and package source. This public uv example uses Python 3.12:
 
 ```bash
-uv add --compile-bytecode "antioch-sim[isaac-sim]"
-antioch init
+uv init --bare --python ">=3.12,<3.13"
+uv python pin 3.12
+uv add --compile-bytecode "antioch-sim[isaac-sim]==<sdk-version>"
+uv run antioch init --engine isaac-sim-6.0.1 --json
 ```
 
-Use `antioch-sim[isaac-lab]` for Isaac Lab. Isaac Lab also installs Isaac Sim
-editor stubs because Lab builds on Sim.
+Use `antioch-sim[isaac-lab]` and engine `isaac-lab-3.0` for Lab.
+With one engine extra, init can infer the engine. Use the existing package
+manager and private wheel/source when supplied; do not substitute public latest.
 
-`antioch init` chooses the engine from the installed extra and creates
-`antioch.yaml`, `Dockerfile`, `.dockerignore`, example simulation code, and
-example suites. It does not start a session or upload project content.
+`antioch init --help` lists supported engine identifiers. Choose the image and
+matching SDK types together; a different Isaac version requires a compatible
+runtime image, not just a Python dependency change. [Research](../../antioch-research/SKILL.md)
+can compare version-specific APIs, but its indexed versions are not an engine
+availability list. Confirm a required version is supported before promising it.
 
-## Select the simulation image
+Init writes the manifest, Dockerfile, ignore files, starter source, and example
+suites. It does not install dependencies, register a remote project, or start
+compute. Existing scaffold files are preserved. An owning manifest in this
+directory or an ancestor causes refusal; there is no force/repair mode.
+Repair existing files directly without deleting identity to rerun init.
 
-The generated Dockerfile opens with `FROM antioch-engine/<engine>` — read the
-generated file to see the exact tag.
-`antioch init` writes the installed SDK release into this `FROM` line, so the
-local SDK and the remote engine image start on the same release.
-Do not write that line by hand and do not leave it
-untagged: an engine reference with no tag has no default and the build refuses
-it. A package-manager upgrade does not rewrite an existing Dockerfile. Explicit
-`antioch project update` can update literal engine tags with the selected SDK;
-ordinary build and init behavior is unchanged.
+Keep one intended project and remove unneeded generated examples from your
+deliverable. Check that preserved Dockerfiles and ignore rules include the
+requested source.
 
-The simulator service is the one that uses an Antioch engine image or a
-Dockerfile that starts from one; the role follows the image, not the service
-name. Supporting services can use ordinary registry images.
+## Validate locally
 
-## Publish custom dependencies
+These SDK calls need no authentication or simulator:
 
-Append these instructions to the generated Dockerfile, below the `FROM` line
-`antioch init` wrote:
+```python
+from antioch.core.project import load_manifest
+from common.models import ProjectManifest
+
+manifest = load_manifest()
+schema = ProjectManifest.model_json_schema()
+```
+
+Validate the manifest and import source with the project interpreter.
+Inspect schema fields and installed API docstrings rather than guessing keys.
+`antioch project show --json` also resolves registry/service information
+and requires authentication; it is not an offline validator.
+
+## Images and source
+
+Init pins the installed SDK in `FROM antioch-engine/<engine>:<sdk-version>`.
+Untagged engine references are refused. The simulator role follows this image,
+not the service name. With multiple engine services, mark the runner using
+`x-antioch: {runner: true}`.
+
+A generated Dockerfile sets `ANTIOCH_PROJECT_DIR`, uses
+`/workspace/project`, and ends with `COPY . .`. For custom dependencies,
+insert installation before that final copy, for example:
 
 ```dockerfile
-WORKDIR /workspace/project
 COPY pyproject.toml uv.lock ./
 RUN uv export --frozen --no-dev --no-emit-project --output-file /tmp/requirements.txt \
     && uv pip install --system --no-cache --requirements /tmp/requirements.txt
-
-COPY . .
 ```
 
-Extend the generated Dockerfile for project dependencies. Antioch builds it
-from the declared context. Do not put credentials in `antioch.yaml` or the
-Dockerfile.
+Keep credentials out of build inputs. An interactive session receives initial
+source and later sync edits. A detached run receives image contents: all
+required source must be baked in, not merely present in a live notebook.
+Registry images are mirrored to immutable digests. Recorded reruns use those
+digests and saved parameters; they do not promise identical physics or timing.
 
-## Use registry images
-
-```yaml
-services:
-  autonomy:
-    image: registry.example.com/robot/autonomy:release
-```
-
-Antioch resolves and mirrors the image to an Antioch-owned digest. A later
-change to the source tag cannot change a submitted run.
-
-## Understand repeatable identity
-
-Each submitted scenario or suite saves the resolved digest for every service
-along with the selected inputs. Together, they identify the exact software and
-settings used for that run.
-
-Project source lives at `/workspace/project` for `image:` and `build:`
-services. Watch actions transfer edits into a live interactive session. A
-background submission builds the current YAML independently. Dockerfile `COPY`
-must place source at that same path; there is no run source bundle. A rerun
-uses saved image digests and parameters under a new run ID. It does not preserve
-unbuilt interactive edits. An unsupported old runtime is refused before
-allocation, while its saved history remains readable.
-It does not promise the same outcome or timing when scheduling, capacity,
-simulator timing, or external assets differ.
-
-## Update the project SDK
+## Install and update
 
 ```bash
+antioch setup --dry-run
 antioch project update --dry-run
-antioch project update
-antioch --version
 ```
 
-Update the Dockerfile's engine tag deliberately. Run the narrow scenario or
-suite that proves compatibility after the update.
+Run the non-dry operation only when installation/update is requested:
+
+- `antioch setup` installs the selected deployment's verified SDK/plugin
+  pair, globally with uv or into an existing `--python PATH` environment.
+  It configures detected Claude Code and Codex clients, not projects or shell
+  profiles. Its post-install checks test existing sign-in and Research without
+  logging in; read each component result even if the command fails.
+- `antioch project update` updates project dependency and literal engine
+  pins, locks/syncs with uv, and builds changed images. `--no-build` excludes
+  builds. It preserves engine families and extras and does not replace a live
+  session. Use a new session to run the new image.
+
+Staging private artifacts need existing provider access. Do not replace a
+missing release pair or credentials with a guessed alternative.
+
+## Build and revision history
+
+```bash
+antioch project build
+antioch project revision list --json
+antioch project revision show REVISION
+antioch project revision tag candidate REVISION
+```
+
+Build finalizes one immutable service graph. Revision tags are movable names
+for existing revisions; tagging does not rebuild. Build only within the
+authorized task, then use [sessions](sessions.md) for execution.

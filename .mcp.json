@@ -2,7 +2,46 @@
   "mcpServers": {
     "antioch-research": {
       "command": "antioch-research-mcp",
-      "args": []
+      "args": [],
+      "env_vars": [
+        "ANTIOCH_ENV",
+        "ANTIOCH_ROME_URL",
+        "ANTIOCH_ROME_CA_BUNDLE",
+        "ANTIOCH_EDGE_CA_BUNDLE",
+        "ANTIOCH_CONFIG_DIR",
+        "XDG_CONFIG_HOME",
+        "ANTIOCH_TOKEN",
+        "ANTIOCH_USER_ID",
+        "ANTIOCH_TENANT_ID",
+        "ANTIOCH_WORKSPACE_ID",
+        "ANTIOCH_WORKSPACE_ROME_URL",
+        "ANTIOCH_WORKSPACE_ROME_CA",
+        "ANTIOCH_SCENARIO_CREDENTIAL",
+        "ANTIOCH_SCENARIO_ROME_URL",
+        "ANTIOCH_SCENARIO_ROME_CA"
+      ]
+    },
+    "antioch-jupyter": {
+      "command": "antioch-jupyter-mcp",
+      "args": [],
+      "tool_timeout_sec": 960,
+      "env_vars": [
+        "ANTIOCH_ENV",
+        "ANTIOCH_ROME_URL",
+        "ANTIOCH_ROME_CA_BUNDLE",
+        "ANTIOCH_EDGE_CA_BUNDLE",
+        "ANTIOCH_CONFIG_DIR",
+        "XDG_CONFIG_HOME",
+        "ANTIOCH_TOKEN",
+        "ANTIOCH_USER_ID",
+        "ANTIOCH_TENANT_ID",
+        "ANTIOCH_WORKSPACE_ID",
+        "ANTIOCH_WORKSPACE_ROME_URL",
+        "ANTIOCH_WORKSPACE_ROME_CA",
+        "ANTIOCH_SCENARIO_CREDENTIAL",
+        "ANTIOCH_SCENARIO_ROME_URL",
+        "ANTIOCH_SCENARIO_ROME_CA"
+      ]
     }
   }
 }

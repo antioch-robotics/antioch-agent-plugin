@@ -1,71 +1,23 @@
-# Work with assets
+# Reusable assets
 
-Assets are versioned robots, props, environments, datasets, checkpoints, and
-other reusable content. Organization members share the catalog. Search it before you
-create equivalent content.
-
-## Find an asset
-
-Every `-q` word must appear, in any order and any case, in an asset's name or
-description. Names are folder paths such as `robots/example`, so folder names
-are searchable too. This is a text search, not a directory filter:
+The organization catalog holds versioned robots, props, environments,
+datasets, and checkpoints. Search before recreating named content:
 
 ```bash
 antioch asset list -q "mobile robot" --json
-antioch asset list -q robots --json
 antioch asset show robots/example --json
-```
-
-Asset records use `scope` (`tenant` or `shared`). The CLI renders `tenant` as
-`organization` in both human and JSON output. Each listed entry carries `name`,
-`description`, `scope`, `latest_version`, and `version_count`. `show` adds
-`versions`:
-each version's `content` carries `content_type`, `size_bytes`, and `sha256`;
-its `preview` is present when published. When several assets could fit,
-prefer the one whose description says what you need, and pin its version
-when you load it. Use `antioch asset list --help` for paging.
-
-The shelf stores no dimensions. To measure an asset, load it and read its
-bounds inside the scenario body. The result is in stage units, not necessarily
-meters; check the stage's `metersPerUnit` before converting it:
-
-```python
-from pxr import Usd, UsdGeom
-
-prim = antioch.load_asset("robots/example", prim_path="/World/Robot", version="v1")
-bounds = UsdGeom.BBoxCache(Usd.TimeCode.Default(), [UsdGeom.Tokens.default_]).ComputeWorldBound(prim)
-size_stage_units = bounds.ComputeAlignedRange().GetSize()
-```
-
-## Pull and verify
-
-```bash
 antioch asset pull robots/example --version v1 --output ./assets/example
-antioch asset verify robots/example --version v1
 ```
 
-Transfers use signed links directly to object storage. Verification checks the
-stored published object's SHA-256 digest and rejects unresolved external
-references in supported text USD files. It does not read a local file.
+Every query word must occur in the name or description; this is text search,
+not a directory filter. Read scope, description, and versions before choosing.
+Wire records use `scope` (`tenant`, `shared`). CLI scope is `organization`
+or `shared`; `organization` selects the organization's assets. Show includes content type,
+size, digest, and preview.
 
-## Publish a version
+## Load and measure
 
-```bash
-antioch asset push ./robot.usdz --name robots/example --version v2
-```
-
-Asset versions are immutable. Repeating a publish with the same digest is an
-idempotent retry. The same name and version with different content is refused.
-Publish self-contained USDZ content. Flattening USD composition does not
-package textures or other external files. Load the Isaac Sim skill's
-`references/usd.md` for dependency packaging and validation before publishing.
-Use `antioch asset push --help` for version, description, media type, and
-preview input.
-
-If an interrupted publish left an asset version without content, inspect
-`antioch asset repair --help` and repair only the named asset.
-
-## Use assets in Python
+After simulator startup:
 
 ```python
 import antioch
@@ -74,10 +26,62 @@ prim = antioch.load_asset("robots/example", prim_path="/World/Robot", version="v
 path = antioch.fetch_asset("datasets/example", version="v2")
 ```
 
-`antioch.load_asset` verifies and references native USD content into an active
-stage. `antioch.fetch_asset` returns a verified path for another framework
-loader. Pin a version in repeatable work.
+Load requires an active stage, an unused absolute prim path, and USD with a
+valid default prim. The reference includes that prim's subtree, not sibling
+materials; keep required materials inside it or reference them explicitly.
+Fetch returns verified bytes as a local file path for
+another loader; it does not require Kit or validate USD dependencies.
+Pin versions for repeatable work.
+The catalog has no dimensions: read loaded bounds and stage `metersPerUnit`
+before converting sizes to meters.
 
-Publish a file or the flattened active stage with `antioch.save_asset`. Read
-the installed API docstring before use because the required version and
-preview behavior are part of the Python contract.
+## Isaac's native asset library
+
+Isaac also supplies robots, props, and environments outside the Antioch catalog.
+Use [research](../../antioch-research/SKILL.md) to find the asset's exact path
+and prerequisites for the selected Isaac version. After
+[simulator startup](../../isaac-sim-6/SKILL.md), use
+`isaacsim.storage.native.get_assets_root_path()` to resolve the configured
+library root and `path_join` to append the verified library-relative path.
+The root may be a remote URL, not a directory on the authoring computer.
+
+Example paths relative to that root in Isaac Sim 6.0.1:
+
+- Warehouse: `Isaac/Environments/Simple_Warehouse/full_warehouse.usd`
+- Robot: `Isaac/Robots/FrankaRobotics/FrankaPanda/franka.usd`
+
+Pass these without a leading slash: `path_join(root, "Isaac/Robots/FrankaRobotics/FrankaPanda/franka.usd")`.
+For other content, search the indexed [Isaac asset catalog](https://docs.isaacsim.omniverse.nvidia.com/6.0.1/assets/usd_assets_overview.html) and examples first.
+To browse a listable runtime directory, use
+`isaacsim.storage.native.find_filtered_files([directory], max_depth=2)`;
+choose a narrow directory, such as the resolved `Isaac/Robots/FrankaRobotics`,
+rather than recursively scanning the whole library. A URL can serve files
+without supporting directory listing; an empty listing does not prove absence.
+
+Reference the resolved USD path with native USD/Isaac APIs; an absolute path
+must be reachable from the remote service, not merely on the client. `fetch_asset` and
+`load_asset` accept Antioch catalog names or IDs, not arbitrary paths or URLs.
+Check availability and dependent textures/layers before judging a loaded scene.
+See [USD pipeline](../../isaac-sim-6/references/usd-pipeline.md) for packaging
+and [spatial reasoning](../../isaac-sim-6/references/spatial-reasoning.md) for
+bounds, units, and placement.
+
+## Publish
+
+Before publishing USD or calling it ready for reuse, reference it into a clean
+scene on the target runtime and inspect geometry, materials, and dependencies.
+
+```bash
+antioch asset push ./robot.usdz --name robots/example --version v2
+antioch asset verify robots/example --version v2
+```
+
+Versions are immutable. Repeating the same digest is idempotent; different
+bytes under the same version are refused. Publish self-contained content:
+flattening USD composition does not package textures. Use the Isaac
+[USD pipeline](../../isaac-sim-6/references/usd-pipeline.md) for dependency packaging.
+
+Verify checks the stored object digest and supported text-USD references,
+not a local file or whether USD parses and renders. For an incomplete upload, inspect `antioch asset repair --help`
+and target only that version. The SDK's `save_asset` publishes files or
+the flattened stage; inspect its installed signature for version/preview inputs.

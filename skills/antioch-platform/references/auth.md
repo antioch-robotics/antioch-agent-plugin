@@ -1,24 +1,24 @@
-# Identity: `antioch auth`
+# Identity and access
 
-## `antioch auth login` — device flow
+`antioch auth whoami --json` reports user, organization, deployment, API,
+and credential source. Check this when access is unclear. Login is shared
+across virtual environments for the selected deployment.
 
-```
-antioch auth login
-```
+`ANTIOCH_TOKEN` overrides a saved browser login. Login, logout, and
+organization switching refuse while it is active. Do not print or replace it,
+switch deployment, or change accounts to make a failed lookup pass.
 
-- Prints a sign-in code and activation URL, then polls for approval. **In an agent context, surface the code and URL to the user and wait** — only the human can complete the browser step. `--json` emits the authenticated identity once it lands.
-- The CLI stores the login securely under `~/.config/antioch` and refreshes it when needed. The login survives virtual-environment changes and new projects; running `auth login` again replaces it.
+Remote access and local authoring are separate. Complete authorized project
+setup and offline validation while access is blocked. A Research failure alone
+does not establish that simulation access fails.
 
-## Identity and organizations
+## User-requested changes
 
-- `antioch auth whoami --json` names the user and active organization. Run this
-  first when identity or access is unclear.
-- `antioch auth switch --org ORG` selects an organization without a prompt;
-  add `--json` to emit the resulting identity. Without `--org`, the command
-  remains an interactive selector. The selected organization owns every run
-  and asset created afterwards.
-- `antioch auth logout --json` removes the local login from this computer.
+- `antioch auth login` prints a device code and activation URL for the
+  human to approve. Repeating it replaces the saved deployment login.
+- `antioch auth switch --org ORG` selects the organization that owns
+  subsequent work.
+- `antioch auth logout --json` removes the saved local login.
 
-## Account settings
-
-Account settings live in the webapp, not the CLI.
+An error recommending login is a diagnostic, not permission to change identity.
+Account settings are in the console.

@@ -1,42 +1,35 @@
 ---
 name: isaac-sim-6
-version: "1.1.11"
+version: "1.3.2"
 description: >-
-  Guides Isaac Sim work in Antioch GPU sessions: scene and USD authoring,
-  physics, sensors, asset import, navigation, manipulation, rendering, and
-  synthetic data. Use when writing, porting, reviewing, or debugging Isaac Sim
-  code for scenarios, suites, scripts, or notebooks. Covers simulator startup,
-  lazy imports, live-state readback, and task-specific validation; routes API
-  detail to antioch-research. Not for Antioch dispatch and asset-catalog
-  operations (antioch-platform), scenario verdict/telemetry design
-  (scenario-design), or Isaac Lab environments (isaac-lab-3).
+  Guides Isaac Sim 6.0.1 scene, USD, physics, sensor, asset, navigation,
+  manipulation, rendering, and synthetic-data work in Antioch GPU sessions.
+  Applies when writing, porting, reviewing, or debugging Isaac Sim code in a
+  scenario, suite, script, or notebook. Covers the remote Kit lifecycle, lazy
+  imports, current experimental APIs, live-state readback, and evidence
+  checks; dispatch and catalog work belong to antioch-platform, verdicts and
+  telemetry to scenario-design, and Lab code to isaac-lab-3.
 ---
 
 # Isaac Sim on Antioch
 
-This skill targets Isaac Sim **6.0.1 / Kit 110.1.2**. Code is authored without
-a local simulator and runs in the remote simulator service. Load
-`antioch-platform` first for project setup, dispatch, sessions, and readback.
+The runtime pin is **Isaac Sim 6.0.1 / Kit 110.1.2**. Author code without a
+local simulator; Antioch runs it in the remote simulator service. Load
+[Antioch platform](../antioch-platform/SKILL.md) for project and session setup;
+its [environment guide](../antioch-platform/references/environment.md) owns
+engine selection and dependencies.
 
-Preserve the user's task. An API question does not authorize a GPU run.
-A diagnosis does not authorize changing the physical model. For requested
-implementation, use a small representative probe before a costly sweep.
+The domain references preserve NVIDIA's specialist guidance and examples,
+adapted at the startup, import, and execution boundaries below. Each names its
+upstream source. Native APIs remain native; upstream source links do not imply
+that a helper script or local installation is present in the project.
 
-## Ground the API
+## Start Kit and own the loop
 
-Use `antioch-research` before relying on a vendor API or behavior claim.
-Inspect the exact runtime pin, signature, return shape, units, prerequisites,
-and backend support. Dated documentation and source corpora can differ from
-the image. A harvested type proves an interface, not a passing physical run.
-
-## Who starts Kit
-
-- A decorated scenario run starts Kit before the scenario body. Declare
-  simulation needs in `@antioch.scenario(config=...)`; do not start another app.
-- A plain script or notebook owns startup. Call
-  `antioch.start_simulation()` before simulator imports.
-- Use one simulation/stepping owner per process. Do not add a second
-  `SimulationApp` around a framework that already owns one.
+An Antioch scenario starts Kit before its body. A plain script or notebook
+calls `antioch.start_simulation()` before simulator imports. One process has
+one simulation and stepping owner; do not wrap a framework that already owns
+an app in another `SimulationApp`.
 
 ```python
 import antioch
@@ -45,72 +38,43 @@ import antioch
 def main() -> None:
     antioch.start_simulation()
     world = antioch.world()
-    # Build the scene here, then reset, step, and read live state.
+    world.reset()
+    world.step(render=True)
 ```
 
-A second identical startup is a no-op; a conflicting config raises.
-`antioch.world()` returns the native classic Isaac `World` singleton and is
-Isaac Sim-only. `antioch.stage()` returns the current USD stage.
-`antioch.application()` returns the app when Antioch started it; an externally
-started app retains its own handle.
+`antioch.world()` is the classic Isaac Sim `World` singleton; it is not an
+Isaac Lab handle. `antioch.stage()` returns the current USD stage and
+`antioch.application()` returns Antioch's app handle when Antioch started it.
+Repeating an identical startup is a no-op; a conflicting startup config
+raises.
 
-### SimulationConfig
+`SimulationConfig` selects startup behavior:
 
-| Field | Default | Contract |
-|---|---|---|
-| `log_level` | Engine default | `fatal/error/warning/info/verbose` |
-| `renderer_quality` | `"balanced"` | The one picture control: `performance` (1920×1088 budget), `balanced` (2560×1440), `quality` (3840×2176) plus RTX startup settings |
-| `physics_dt` / `render_dt` | 1/60 each | Render period must be an integer multiple of physics period |
-| `physics_engine` | `"physx"` | `"newton"` selects the experimental Newton integration |
-| `extensions` | `()` | Extra extension IDs enabled before the first stage |
-| `extra_args` | `()` | Native Kit arguments appended after Antioch defaults |
-| `stream` | Inherited | Launch preference; explicit CLI flags win |
-| `timeout_s` | Inherited | Launch timeout; explicit CLI timeout wins |
+| Field | Contract |
+|---|---|
+| `log_level` | `fatal`, `error`, `warning`, `info`, or `verbose`; default is the engine default. |
+| `physics_dt`, `render_dt` | Render period is an integer multiple of physics period. |
+| `physics_engine` | `physx` by default; `newton` selects Isaac's experimental Newton integration. |
+| `extensions` | Extension IDs enabled before the first stage; installed does not mean enabled. |
+| `renderer_quality` | `performance`, `balanced`, or `quality`; the global picture/RTX preset, not a sensor resolution. |
+| `extra_args` | Native Kit arguments appended after Antioch defaults. |
+| `stream`, `timeout_s` | Authored defaults; explicit CLI flags win. |
 
-For example, opt into `("isaacsim.ros2.bridge",)` or
-`("isaacsim.sensors.experimental.physics",)` when needed. Installed extensions
-are not all enabled automatically. Put custom extension files in the service
-image and use `extra_args` for an extension search path if required.
+Enable optional robot, sensor, and bridge APIs through their owning extension
+IDs in `extensions`; a Python import path is not always the extension ID.
+For a missing module after startup, check extension availability and startup
+errors before changing dependencies. Put custom extension files in the image.
+Attached scenario/suite commands inherit stream and
+timeout defaults; mixed defaults need explicit CLI values. See
+[session modes](../antioch-platform/references/sessions.md) for dispatch. Native
+startup honors authored `stream`, while `service exec` remains bounded by its
+CLI `--timeout` (900 seconds by default).
 
-Attached and detached dispatch have different stream behavior. Use the
-platform skill rather than restating the whole CLI contract here.
+## Import and API boundaries
 
-Streaming keeps the native 60 FPS default. Antioch has no FPS control;
-use `extra_args` for native Isaac settings. Displayed video FPS is measured
-delivery, not renderer updates or physics steps. Headless background work
-does not start the stream encoder. Retired `stream_fps` inputs are ignored
-with an `ANTIOCH-DEP-010` notice.
-
-`renderer_quality` is the one picture control and global RTX configuration,
-not a stream-only setting. Each tier sets a stream budget, the largest picture
-the encoder sends, and the RTX startup settings. `performance` allows 1920×1088
-with DLSS performance and disables reflections and translucency; `balanced`,
-the default, allows 2560×1440 with DLSS balanced; `quality` allows 3840×2176
-with DLSS quality mode and DLAA instead of DLSS upscaling. The browser keeps
-its own window shape, never requests more pixels than its screen has, and
-rounds to a 32-pixel grid, so the picture is pixel exact up to the budget. A
-stream boots at 1920×1088 and the native livestream resizes it. Headless work
-renders the main viewport at 1280×720; use `extra_args` native window settings
-to change it. Sensor camera resolutions, `physics_dt`, `render_dt`, and
-notebook idle updates remain independent. These settings can affect sensor
-render products that use them. The retired `ultra` value selects `quality`
-with an `ANTIOCH-DEP-012` notice: its frame generation stalled Kit beside an
-active camera annotator graph. A streamed process starts with Kit's docked
-panels hidden so the viewport fills the frame; the Window menu reopens them.
-Explicit native arguments win, and ordinary `carb.settings` or
-`SimulationApp.set_setting()` calls after startup stay untouched. Antioch
-never reapplies a preset after startup. Retired `render_quality`, `viewport`,
-and `stream_resolution` inputs emit shared `ANTIOCH-DEP-008`, `ANTIOCH-DEP-009`,
-and `ANTIOCH-DEP-013` notices and are discarded. None is an alias and no value
-is forwarded; a fixed stream size is no longer a setting. Unknown inputs still
-fail.
-
-## Lazy imports
-
-`pxr`, `omni`, `carb`, `isaacsim`, and `isaaclab*` imports belong inside
-functions or under `if TYPE_CHECKING:`. This includes helper modules and class
-definitions that would import them transitively. Every project module must
-remain importable without a simulator.
+Keep `pxr`, `omni`, `carb`, `isaacsim`, and `isaaclab*` imports inside a
+function or under `if TYPE_CHECKING:`. This applies to helper modules and
+transitive imports, so every project module imports without a simulator.
 
 ```python
 from typing import TYPE_CHECKING
@@ -119,101 +83,87 @@ if TYPE_CHECKING:
     from pxr import Usd
 
 
-def current_stage() -> "Usd.Stage":
+def stage() -> "Usd.Stage":
     import antioch
 
     return antioch.stage()
 ```
 
-Do not import CUDA/engine integrations before their required startup boundary.
-If a library such as torch conflicts with Kit startup, inspect the pinned
-launcher and import order; "torch before settle always hangs" is not a
-universal rule.
+Use [research](../antioch-research/SKILL.md) for native examples and the exact
+pinned signature, return shape, units, prerequisites, and backend support.
+Harvested stubs establish an interface, not physics, rendering, timing, or
+backend behavior.
 
-## Current and retained APIs
+Current surfaces include `isaacsim.core.simulation_manager`,
+`isaacsim.core.experimental.prims`,
+`isaacsim.core.experimental.utils`,
+`isaacsim.sensors.experimental.rtx`,
+`isaacsim.sensors.experimental.physics`, and
+`isaacsim.storage.native`. Classic `isaacsim.core.api.World` remains shipped;
+some classic APIs are deprecated and old `omni.isaac.*` paths were removed.
+Check the symbol in scope instead of assuming either all legacy or all
+non-experimental APIs are available.
 
-Use the pinned export and migration source to map each symbol. The main
-current surfaces include:
+Newton can auto-switch at startup. Select it through `SimulationConfig` before
+the stage opens and verify
+`SimulationManager.get_active_physics_engine()` when backend identity matters.
+The standalone `newton` solver and Isaac's Newton USD/tensor integration are
+different surfaces.
 
-| Work | Entry point |
-|---|---|
-| Experimental simulation lifecycle | `isaacsim.core.simulation_manager` |
-| Live prim and articulation views | `isaacsim.core.experimental.prims` |
-| Stage/app/transform utilities | `isaacsim.core.experimental.utils` |
-| RTX sensors | `isaacsim.sensors.experimental.rtx` |
-| Physics sensors | `isaacsim.sensors.experimental.physics` |
-| Asset-root discovery | `isaacsim.storage.native` |
+Custom Warp kernels and solver code can work alongside native APIs. Research
+the required integration, device/array ownership, and stepping contract before
+connecting them; a standalone solver's features need not exist through Isaac's
+backend. See [physics](references/physics-simulation.md) for native setup and
+[Isaac Lab](../isaac-lab-3/SKILL.md) for managed environments.
 
-Classic `isaacsim.core.api.World` remains shipped and is what
-`antioch.world()` returns. Several classic APIs are deprecated but present;
-others, including old `omni.isaac.*` paths, were removed. Do not generalize
-that all old APIs remain importable, or that every non-experimental API is
-gone. Port the specific interface in scope.
+## Build, reset, step, and read live state
 
-Newton's extension has auto-switch behavior. Select the backend through
-`SimulationConfig` before startup and verify
-`SimulationManager.get_active_physics_engine()` if a result depends on it.
-Do not enable Newton and then assume PhysX is still active.
+Build the scene, initialize views/controllers through the selected framework,
+reset, apply controls, then step with that framework. With the classic World,
+`World.step(render=True)` advances `render_dt / physics_dt` physics steps and
+`render=False` advances one. Use `run.sim_s` or engine callback time, not a
+step-call counter. App updates can advance a playing timeline but do not define
+the physics timestep. A physics scene is required, but `/World/PhysicsScene` is
+only a convention.
 
-## Build, step, observe
+Experimental `RigidPrim.get_world_poses()` returns batched Warp position and
+quaternion arrays; select the body explicitly, even for a `(1, 3)` position.
+Read physics-backed state for physical checks. USD transforms and
+`UsdGeom.XformCache` can lag physics writeback or cache edits, so they are not
+an independent live-state query.
 
-Inside a scenario, build the scene, initialize/reset through the chosen
-framework, apply runtime controls, and advance using that framework's step.
-With `antioch.world()` this is normally `world.reset()` followed by
-`world.step(render=True)` when rendered evidence is needed.
+Isaac Sim commonly uses WXYZ quaternions; Isaac Lab 3 and scipy use XYZW.
+Convert once at the boundary and confirm any API option that names an order.
 
-One `World.step` call is not one physics step. With `physics_dt` smaller
-than `render_dt`, `World.step(render=True)` advances `render_dt / physics_dt`
-physics steps and `World.step(render=False)` advances exactly one, so a loop
-that renders every N-th call advances more physics than N steps per N calls.
-Count physics time from the engine — `run.sim_s`, or the world's physics dt
-times the physics callback count — never from an authored call counter. The
-SDK's config validator requires `render_dt` to be an integer multiple of
-`physics_dt`, which is what makes that ratio a whole number of steps.
+## Evidence
 
-A physics scene must exist, but `/World/PhysicsScene` is not a required path.
-Kit app updates can advance a playing timeline; their count does not establish
-a chosen physics timestep, and neither does a step-call count. Do not mix app
-pumping, classic World stepping, and another framework's independent step
-loop without understanding ownership.
-
-Read physics-backed state during simulation. Experimental
-`RigidPrim.get_world_poses()` returns batched Warp position/quaternion arrays.
-Select the intended body explicitly when converting a `(1, 3)` position.
-
-USD transform reads depend on physics writeback and cache freshness. They can
-be stale, but are not universally frozen at the initial pose. Use the owning
-backend's live state for physical verdicts. Check camera/render synchronization
-separately.
-
-Isaac Sim quaternion APIs commonly use WXYZ; scipy and Isaac Lab 3 use XYZW.
-Convert once at each boundary and check the chosen API, including any named
-quaternion-order option.
-
-## Evidence and reporting
-
-Define the task's pass conditions before running. Record measured state and
-named checks, not just logs or attractive frames. Keep failure samples for
-diagnosis. Do not weld a payload, teleport a robot, remove obstacles, or loosen
-a threshold to make a physical test pass.
-
-A source-verified API, a CPU typecheck, a simulated result, and a rendered
-artifact prove different things. Report them separately. Do not describe a
-recipe as live-verified unless the exact relevant runtime probe ran.
+Define the task oracle before running. Measure the requested behavior, retain
+failed samples, and distinguish source-verified API, typecheck, runtime probe,
+and rendered artifact. Proximity, a command acknowledgement, or a final
+image is not physical contact or task success; use the domain reference that
+owns the measurement. Report unrun runtime behavior as unverified.
 
 ## Domain references
 
-Load only the domain needed. Each reference owns its whole workflow; detailed
-vendor API lookup belongs to research rather than a second layer of recipes.
+Read the reference for the task; linked examples provide depth without loading
+the whole library. Start with [assets](../antioch-platform/references/assets.md)
+to find existing content in Antioch's catalog or Isaac's native library.
 
-| Domain | Reference | Use for |
-|---|---|---|
-| Physics | `references/physics.md` | Backends, collisions, drives, live state, deformables, reset and stability |
-| USD | `references/usd.md` | Layers, composition, transforms, instancing and packaged assets |
-| Assets | `references/assets.md` | URDF/MJCF import, articulation inspection, units, placement and materials |
-| Sensors | `references/sensors.md` | Cameras/calibration, lidar/radar/acoustic, IMU/contact and sensor data |
-| Navigation | `references/navigation.md` | Maps, footprints, route clearance, mobile control and ROS export |
-| Manipulation | `references/manipulation.md` | IK, grasp mechanics, transport and placement checks |
-| Rendering | `references/rendering.md` | Lighting, capture, image diagnosis, video and batch resource ownership |
-| SDG | `references/sdg.md` | Replicator, randomization, MobilityGen record/replay and dataset validation |
-| Diagnosis | `references/troubleshooting.md` | Failure isolation, evidence and bounded probes |
+| Task | Native guidance |
+|---|---|
+| Bodies, collision, materials, joints, backends | [Physics](references/physics-simulation.md) |
+| Layers, composition, variants, instancing | [USD architecture](references/usd-composition-architecture.md) |
+| Asset packaging and delivery | [USD pipeline](references/usd-pipeline.md) |
+| Bounds, units, placement, frames | [Spatial reasoning](references/spatial-reasoning.md) |
+| Import URDF/MJCF and inspect robots | [Conversion](references/urdf-mjcf-to-usd-conversion.md), [articulations](references/usd-articulation.md) |
+| Cameras, calibration, RTX and physics sensors | [Sensors](references/isaac-sim-sensor.md), [cameras](references/isaac-camera.md) |
+| Maps, footprints, paths, wheeled control | [Navigation primitives](references/navigation-primitives.md), [occupancy maps](references/occupancy-map.md), [robot navigation](references/isaac-sim-robot-navigation.md) |
+| Reach, grasp, transport, avoid obstacles | [Manipulation](references/manipulation-ik.md), [motion generation](references/motion-generation.md) |
+| Lighting, materials, images, video | [Rendering](references/isaac-sim-rendering.md) |
+| Annotated or mobile-robot datasets | [Data collection](references/data-collection-sim.md), [MobilityGen](references/mobility-gen.md) |
+| Runtime failures or evidence review | [Troubleshooting](references/isaac-sim-troubleshooting.md), [validation](references/isaac-sim-validator.md) |
+
+For a failure, start with the run's status, first error, input, and smallest
+reproduction; use a bounded probe and keep the evidence with the result.
+See [agentic simulation](../agentic-simulation/SKILL.md) to drive that loop and
+[scenario design](../scenario-design/SKILL.md) for recorded checks and telemetry.

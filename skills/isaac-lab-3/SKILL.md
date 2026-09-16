@@ -1,128 +1,88 @@
 ---
 name: isaac-lab-3
-version: "1.2.0"
-description: Guides Isaac Lab environment, manager, controller, RL training, teleoperation, demonstration-dataset, and imitation-learning work in Antioch GPU sessions. Use for isaaclab imports or errors, manager-based and direct environments, observations/rewards/terminations, rsl-rl or skrl integration, Mimic, scaling, and migration from Lab 2.x. Covers lazy imports, XYZW quaternions, ProxyArray access, indexed/masked state writes, and backend selection. Not for plain Isaac Sim authoring (isaac-sim-6), Antioch dispatch/history (antioch-platform), or scenario verdict/telemetry design (scenario-design). Ground vendor API details with antioch-research.
+version: "1.3.1"
+description: Guides Isaac Lab 3.0.0-beta2 environments and manager terms, controllers, RL training, teleoperation, Mimic demonstrations, imitation learning, backend migration, and scaling in Antioch GPU sessions. Applies to `isaaclab*` imports or errors, environment observations/actions/rewards/terminations, rsl-rl or skrl integration, reset and state-write bugs, and Lab 2.x ports. Covers lazy imports, XYZW quaternions, ProxyArray access, indexed/masked writes, and PhysX/Newton selection; plain Isaac Sim authoring, Antioch dispatch/history, and scenario verdicts belong elsewhere, with vendor APIs grounded by antioch-research.
 ---
 
 # Isaac Lab on Antioch
 
-This skill targets **Isaac Lab 3.0.0-beta2 on Isaac Sim 6.0.1**.
-Load `antioch-platform` first. Use `antioch-research` to inspect the selected
-runtime's API and source; not every indexed corpus has the same pin.
-Beta interfaces can change between releases.
+The pin is **Isaac Lab 3.0.0-beta2 on Isaac Sim 6.0.1**. Load
+[Antioch platform](../antioch-platform/SKILL.md) for project/session setup and
+[research](../antioch-research/SKILL.md) for methods, examples, and the
+selected runtime's signatures and source; beta APIs can change.
 
-Preserve scope: explaining a task does not authorize training, and diagnosing
-a run does not authorize changing its reward or termination contract.
-For requested training, establish the workload and budget before dispatching
-a long sweep.
+## Startup and stepping
 
-## Startup and time
+The scenario runner starts Lab through `AppLauncher`. A plain script or
+notebook calls `antioch.start_simulation()` before simulator imports. Keep
+`isaaclab*`, `isaacsim`, `omni`, `pxr`, and `carb` imports inside functions or
+`TYPE_CHECKING`; define config classes in a post-startup factory so discovery
+works without a simulator.
 
-Antioch starts Lab through `AppLauncher`. A scenario runner owns startup;
-the body must not create another launcher. Scripts and notebooks call
-`antioch.start_simulation()` before simulator imports.
+Use Lab's `SimulationContext` or environment loop, not `antioch.world()`.
+Configure `SimulationCfg.dt`, render interval, and environment decimation;
+classic `SimulationConfig.physics_dt/render_dt` does not set Lab timing. Keep
+one stepping owner and do not mix an independent World loop.
 
-Keep `isaaclab*`, `isaacsim`, `omni`, `pxr`, and `carb` imports inside
-functions or `TYPE_CHECKING`. Define config classes inside a factory called
-after startup. A helper module is not exempt from import safety.
+## Lab contracts
 
-Use Lab's `SimulationContext` or environment loop, not `antioch.world()`
-(which is Isaac Sim-only). Configure Lab timing with `SimulationCfg.dt`,
-render interval, and environment decimation. Antioch's
-`SimulationConfig.physics_dt/render_dt` configure the classic World and do
-not set a Lab environment's step period.
-
-`antioch.stage()` exposes the current stage; `antioch.application()` exposes
-the app when Antioch started it. Everything beyond these handles is native
-Lab. Do not mix the environment's stepping loop with an independent World.
-
-## Migration boundaries
-
-| Surface | Lab 3 contract |
+| Surface | Contract |
 |---|---|
-| Quaternions | XYZW; identity `(0, 0, 0, 1)` |
-| Array-valued state | `ProxyArray` access through `.torch` or `.warp` |
-| Selected state writes | `write_*_to_sim_index` or `write_*_to_sim_mask` |
-| Camera | `Camera/CameraCfg`; tiled names remain deprecated aliases |
-| Physics config | `SimulationCfg.physics` with a backend-specific config |
-| Native launcher | Headless default; visualizer options belong to the native launcher |
+| Quaternions | XYZW; identity is `(0, 0, 0, 1)`. |
+| Array state | `ProxyArray`; access tensor methods through `.torch` or `.warp`. |
+| Selected writes | `write_*_to_sim_index` or `write_*_to_sim_mask`; validate shape/device. |
+| Cameras | `Camera`/`CameraCfg`; tiled names are deprecated aliases. |
+| Physics | `SimulationCfg.physics` contains backend-specific configuration. |
+| Launcher | Headless by default; visualizer options belong to the native launcher. |
 
-Do not infer that every `.data.*` property is an array; inspect the selected
-property's type. Convert WXYZ at an Isaac Sim boundary into Lab's XYZW once.
-A literal `(1, 0, 0, 0)` can be an intentional rotation, so check its meaning
-rather than rewriting every occurrence mechanically.
+Inspect each `.data.*` property's type; not every field is an array. Convert
+WXYZ only at an Isaac Sim boundary. `SceneEntityCfg.joint_ids/body_ids` may be
+`slice(None)`; resolve selectors against the articulation's ordered names.
+Older state-write methods may forward with a deprecation warning at this pin;
+prefer the explicit index/mask forms.
 
-Old state-write methods can forward with a deprecation warning at this pin.
-Prefer the explicit selection variant in new code; validate index/mask shape
-and device. `SceneEntityCfg.joint_ids/body_ids` may be `slice(None)`, not a
-list. Resolve the selection against the articulation's actual ordered names.
-
-## Array ownership and updates
-
-`ProxyArray.torch` is a cached zero-copy tensor view; `.warp` exposes the
-underlying Warp array. Use the explicit accessor for tensor methods. Clone
-when you need an independent historical sample. Re-access the data property
-after a full simulation reset or buffer recreation, especially on Newton:
-an old wrapper or tensor can still refer to replaced storage. A saved view
-is not a permanent handle to current state. Do not assume every per-environment
-episode reset recreates buffers; check the selected backend's reset contract.
+`ProxyArray.torch` is a cached zero-copy view and `.warp` exposes the Warp
+array. Clone a historical sample. Re-access the data property after a full
+reset or buffer recreation, especially on Newton; an old wrapper may refer to
+replaced storage. An episode reset does not necessarily recreate buffers.
 
 In a manually owned scene loop, write controls, step, then call
-`scene.update(sim.get_physics_dt())`. A zero timestep does not advance
-timestamp-based caches and is not a reliable "refresh now" operation.
-Do not add duplicate updates around a managed environment that already owns
-this lifecycle.
+`scene.update(sim.get_physics_dt())`. A zero timestep is not a refresh. Do not
+add duplicate updates around a managed environment. Keep device transfers out
+of the hot loop unless the consumer needs CPU data, and check batch axes,
+environment origins, frames, and joint order before computing errors.
 
-Keep device transfers out of the hot loop unless the consumer needs CPU data.
-Check batch axes, environment origins, reference frames, and joint order
-before computing errors.
+## Backends and training
 
-## Backends
+Lab supports `isaaclab_physx` and `isaaclab_newton`. Select matching launch and
+environment configuration before constructing the scene; for example,
+PhysX configuration comes from `isaaclab_physx.physics.PhysxCfg`. Newton-native
+features do not imply support through every Lab asset, sensor, or solver.
+The managed Antioch path runs Kit; kit-less upstream examples are a different
+launch path. Choose the backend by required features and measured behavior.
+Research custom Warp kernels and Newton integrations across libraries, then
+verify compatibility with Lab's array and stepping contracts above. Select
+images and dependencies through the platform's
+[environment guide](../antioch-platform/references/environment.md).
 
-Lab supports `isaaclab_physx` and `isaaclab_newton`. Select matching launch
-and environment configuration before constructing the scene. Concrete
-physics configuration comes from the backend package, for example
-`isaaclab_physx.physics.PhysxCfg`.
+Read [environment authoring](references/env-authoring.md) for manager/direct
+structure, reset semantics, rollout probes, registration, RL adapters, and
+demonstrations. Ground the installed RL library and runner config. rsl-rl 5.x
+uses separate actor/critic configuration; follow the pinned task migration
+instead of copying an older block. Verify checkpoint loading, wrapper reset
+semantics, and a fresh evaluation run.
 
-The managed Antioch path uses Kit; upstream kit-less examples are a different
-launch path. Newton-native capabilities do not automatically imply support
-through every Lab asset, sensor, or solver integration. Choose by the task's
-required features and measured behavior, not a universal environment-count
-claim or a prediction about the ecosystem.
+Before scaling, establish observation/action shapes and frames, normalization,
+limits, decimation, actuator mode, reward terms/units, terminations versus
+time-limit truncation, and complete reset of robot/task state. Random actions
+are a startup smoke test, not policy success; a finite loss or checkpoint is
+not useful behavior. Scale `num_envs` gradually and profile cameras, scene
+state, observations, and optimizer memory separately.
 
-## Environments and training
-
-Read `references/env-authoring.md` for environment structure, resets, manager
-terms, a small recorded rollout, and demonstration/imitation-learning workflows.
-Prefer a shipped task close to the
-requested robot/control problem, then make deliberate changes.
-
-Ground the installed RL library version and its corresponding runner config.
-rsl-rl 5.x uses separate actor/critic configuration; do not copy an older
-`policy/ActorCritic` block without following the pinned migration path.
-The shipped task's agent config and upstream training script are the starting
-points. Verify checkpoint load/save and wrapper contracts too.
-
-Before scaling, verify:
-
-- Observation shape/order, frame, normalization, and finite values.
-- Action scaling, limits, decimation, and actuator interpretation.
-- Reward components and units, without replacing the task with easier rewards.
-- Terminations versus time-limit truncations.
-- Complete reset of physical and task state.
-- Evaluation on held-out cases, not just training return.
-- Saved checkpoints and their metadata through run artifacts.
-
-Random actions are a startup smoke test, not policy success. Zero completed
-episodes is not a measured mean return of zero. A finite loss or a saved
-checkpoint alone does not prove useful behavior.
-
-Scale `num_envs` gradually after a small run works. Profile cameras,
-observations, scene state, and optimizer memory separately. There is no fixed
-"512 cameras per GPU" or environment-count budget that fits all tasks.
-Skipping appearance payloads is inappropriate when observations need them.
-
-Record seeds, image/asset pins, config, metrics, and checkpoints. Seeding is
-necessary for reproducibility but does not guarantee bit-identical GPU runs.
-Use platform history and artifact readback to explain observed results;
-do not describe an unrun training plan as verified.
+Record seed, config, asset/image pins, metrics, and checkpoints. Stubs prove
+interfaces, not physics, rendering, timing, or backend compatibility. Seeding
+does not guarantee bit-identical GPU runs; report unrun training or evaluation
+as unverified and use run artifacts for the evidence.
+See [agentic simulation](../agentic-simulation/SKILL.md) for iterative experiments,
+[scenario design](../scenario-design/SKILL.md) for recorded evaluations, and
+[assets](../antioch-platform/references/assets.md) for reusable robots and worlds.

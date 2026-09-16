@@ -1,443 +1,120 @@
 ---
 name: scenario-design
-version: "1.3.8"
-description: >
-  Teaches agents to design Antioch scenarios end to end — the `@antioch.scenario`
-  unit and its `ScenarioRun` handle, declaring cases and parameters, modelling
-  pass/fail with `run.check`, recording results and artifacts, the platform's
-  automatic viewport read-back and viewer layout, `antioch.Logger` for scalars and
-  camera images, Rerun blueprints, and how to read a finished run back.
-  Use it when writing or reviewing a scenario or suite, when deciding what a run
-  should pass or fail on, when a run's dashboard is empty, grey, black, or
-  short of frames, when choosing a blueprint or diagnosing a livestream, and when
-  verifying an `.rrd`. Not for the CLI's command surface (load
-  `antioch-platform`) or for Isaac authoring itself (load `isaac-sim-6` or
-  `isaac-lab-3`).
+version: "1.4.4"
+description: >-
+  Guides Antioch evaluation design: scenarios, typed parameters and cases, measured checks, results, artifacts, caller recording, telemetry, and Rerun layouts. Use when authoring or reviewing scenarios and suites, defining pass/fail criteria, recording experiments, or diagnosing saved evidence and viewer output. Use antioch-platform for dispatch/history and the Isaac skills for simulator code.
 ---
 
-# Designing scenarios on Antioch
+# Scenario design
 
-A scenario is an evaluation written as a Python function. Antioch can dispatch
-it to a GPU session or record an ordinary caller-owned Python scope. Its inputs,
-pass/fail outcome, results, telemetry, and artifacts stay together. Managed
-runner execution also captures process output. A useful scenario gives an engineer
-enough evidence to understand what the robot did and why it passed or failed.
+A scenario is a Python evaluation with inputs, a task, measured verdicts,
+and evidence. Managed execution pins its service images and captures process
+output. A useful result explains what happened and why it passed or failed.
+See [research](../antioch-research/SKILL.md) to ground the physical model and
+measurement APIs, and [agentic simulation](../agentic-simulation/SKILL.md) to
+iterate on experiments, including fitting parameters to real measurements.
 
-The deep Rerun surface — blueprint constructors, entity-path rules, live
-streaming, and the troubleshooting table — lives in
-[references/telemetry.md](references/telemetry.md). Read this file first;
-load that one the moment you are authoring a viewer layout, wiring live
-telemetry, choosing 0.36.0 blueprint constructors, or diagnosing a recording
-— a dashboard that is empty, grey, black, or short of frames, an `.rrd` that
-will not open, or entity paths that never appear.
-
-## Preserve the task
-
-Use the platform skill for asset lookup, dispatch, and result readback.
-Respect an existing project asset and the user's requested scope. An
-explanation does not authorize a run, and a diagnosis does not authorize
-changing thresholds or replacing physical behavior. When execution is
-requested, start with a representative case before a costly sweep.
-
-## Research first
-
-Scenario code is raw Isaac + Rerun code. Before writing or debugging any of
-it, use the `antioch-research` MCP (see the `antioch-research` skill):
-`research_search` across all pinned corpora for APIs, patterns, and errors;
-`kind='source'` to localize implementations; `research_open` for whole
-files. This skill orients scenario structure — research grounds every API
-call you write inside one.
-
-## The unit
+## Author the unit
 
 ```python
 import antioch
 
-logger = antioch.Logger("vial")
+logger = antioch.Logger("task")
 
 
-@antioch.scenario(tags=["vial", "smoke"], restart_services=("autonomy",))
-def vial_place(run: antioch.ScenarioRun, seed: int = 1) -> None:
-    """Place one vial in the rack and check it seated upright."""
+@antioch.scenario(tags=["smoke"], cases=[antioch.case({"seed": 2}, id="seed-2")])
+def evaluate(run: antioch.ScenarioRun, seed: int = 1) -> None:
+    """Evaluate the requested behavior."""
+    # Build, step, and measure the task here.
 ```
 
-- The runner owns Kit startup and one scenario per process. Do not call
-  `antioch.start_simulation()` from a scenario body; declare what the simulator must be
-  with `@antioch.scenario(config=...)`. A scenario that needs no simulator can
-  pass `config=None`; Antioch still saves its results without paying for Kit.
-- `run` is always the first positional parameter. Every other parameter needs a
-  scalar annotation and a default — that signature *is* the scenario's
-  parameter schema.
-- Keep simulator imports inside the function body. `pxr`, `omni`, `carb`,
-  `isaacsim`, and `isaaclab*` at module scope break discovery on a computer with
-  no simulator.
-- Native scripts and notebooks start Kit themselves. A source-backed decorated
-  scenario can be imported and used as a **programmatic call** after
-  `antioch.start_simulation()`; the public callable omits the run and returns
-  `run.results`. Both managed execution and ordinary local/SSH calls save a
-  scenario run by default. For caller recording, run from a valid full Antioch
-  project manifest, including its service declaration, and existing user/PAT
-  auth. Decorated definitions need a real source file inside the project.
-  A `Scenario` context also works in a notebook cell or REPL with no file.
-  Source-free managed runs cannot be rerun from history; execute the context
-  again instead. No service is
-  built, allocated, or started. `config=None, capture=False` needs no simulator.
-  Use `antioch.Scenario(...)` for an undecorated context block; never construct
-  `ScenarioRun` directly. `Scenario(..., control=None)` is deliberately offline
-  and cannot upload artifacts. Missing auth/project or partial managed context
-  refuses instead of silently becoming offline.
-- Caller `recording_timeout_s`, on `Scenario` or `@scenario`, defaults to 900
-  seconds and must be finite, positive, and at most 86400 seconds. The window
-  includes publication and cannot renew. `run.raise_if_cancelled()` is a
-  cooperative checkpoint on the caller thread; finalization also observes
-  cancellation. There is no SDK worker or forced process stop. Deadline expiry
-  closes the record without proving that the Python process stopped. Caller
-  records have no revision and cannot use managed rerun or livestream. Failed
-  publication keeps local recovery files; a local file is not a saved artifact.
-- Use `profile="perception"` when the scenario needs auxiliary services from
-  that `antioch.yaml` profile during dispatch; the frozen revision includes
-  them. Direct Python calls do not activate profiles or restart services.
-- `restart_services=("autonomy",)` is background policy only. Antioch restarts
-  those named services from the pinned project revision before each background
-  child, without replacing containers, and waits for fresh authored health.
-  Interactive execution ignores the declaration
-  because it is the user's live environment; the user chooses when to run
-  `antioch service restart`.
+The first parameter is `run: antioch.ScenarioRun`. Remaining parameters
+need scalar annotations (`bool`, `int`, `float`, `str`, or
+`Literal`) and defaults. Use `antioch.param(default, ge=..., le=...,
+description=...)` for bounds and documentation.
 
-## A well-modelled scenario declares five things
+The runner starts Kit before the body. Declare startup with
+`config=antioch.SimulationConfig(...)`, not a startup call inside the
+scenario. `config=None` skips runner-owned Kit but still uses remote compute
+under CLI dispatch. Keep simulator imports inside functions; discovery runs
+locally without Isaac.
 
-| | | |
-| --- | --- | --- |
-| Identity | what this run *is* | the function name, `description`, `tags` |
-| Inputs | what varies | typed parameters and `antioch.case(...)` |
-| Task | what the robot must achieve | the body |
-| Verdict | whether it achieved it | `run.check(...)` |
-| Evidence | how a reader can tell | results, artifacts, telemetry |
+`scenario_paths` in the manifest selects files/directories for discovery;
+omitting it scans the project. Keep module imports free of simulation, network,
+or file-writing effects. Preview with `antioch scenario collect --json`.
+Collection validates definitions, not the body. Verify native setup and task
+logic with a bounded runtime probe before expanding to many cases.
 
-The fourth is the one most scenarios get wrong. A run that only reports
-"the code did not crash" is not evidence about a robot.
+## Inputs and execution policy
 
-## Declare the verdict with `run.check`
+`antioch.case` accepts parameter overrides, a Cartesian `grid`, or
+correlated `combinations`. Use helper objects, not bare dictionaries, in
+`cases=`. IDs can format resolved parameters; omitted IDs are derived.
+Expansion is capped at 2,000 cases per scenario.
 
-```text
-ScenarioRun.check(criterion: str, passed: bool, *, detail: str = "") -> bool
-```
+Use cases for independent outcomes and comparisons, or an internal loop for
+one evaluation/dataset lifecycle. [Suite selectors](../antioch-platform/references/suites.md)
+group cases in YAML.
 
-Each call records one named criterion and its verdict, and returns `passed` so
-you can branch on it. On normal completion, any final failed check yields `FAILED`; no checks or
-all final checks passing yields `PASSED`, unless an explicit outcome overrides them. So the outcome is the
-*task's* outcome rather than a proxy for whether the process survived.
+Decorator keywords: `name`, `description`, `tags`, `cases`, `config`,
+`blueprint`, `capture`, `profile`, `restart_services`, `recording_timeout_s`.
+
+Inspect the installed signature for defaults and types.
+For background dispatch, `profile` includes its helper services in the revision.
+For interactive work, select profiles when starting the session with
+`antioch session new --profile perception`; dispatch reuses that session's revision.
+`restart_services` restarts those processes with fresh health before each
+background child. Interactive execution and direct calls do not apply it.
+
+## Measured verdicts
 
 ```python
-tilt_deg, seat_mm = measure(scene)
-run.check("upright", tilt_deg <= GATE_TILT_DEG, detail=f"{tilt_deg:.2f}° <= {GATE_TILT_DEG}°")
-run.check("seated", seat_mm <= GATE_SEAT_MM, detail=f"{seat_mm:.2f} mm <= {GATE_SEAT_MM} mm")
-run.check("at rest", speed_mps <= GATE_REST_MPS, detail=f"{speed_mps:.4f} m/s")
+run.add_result("max_error_m", max_error_m)
+run.add_result("error_limit_m", error_limit_m)
+run.check("position", max_error_m <= error_limit_m, detail=f"{max_error_m:.4f} m")
+run.add_artifact("outputs/measurements.json", description="Measured task trajectory")
 ```
 
-Rules that make checks useful:
+Use one named check per task criterion, with measured detail. Checks return
+the supplied boolean and do not stop execution. Reusing a criterion replaces
+its verdict: accumulate failures or worst-case values for conditions that
+must hold throughout motion.
 
-- **One check per criterion the task actually defines.** Four gates, four
-  checks — not one `assert` over their conjunction. A chained `assert` stops at
-  the first failure and hides the other three measurements, which is exactly
-  the information you opened the run to see.
-- **Always pass `detail` with the measurement**, not a restatement of the
-  name. `tilt 7.31° > 5.00°` is a finding; `upright failed` is not.
-- **Checks do not stop the run.** Keep measuring. Re-checking the same
-  criterion replaces its verdict in place. For a condition that must hold
-  throughout motion, accumulate failures or a worst-case measurement and
-  emit the final criterion. A later passing sample must not erase a drop,
-  collision, or earlier limit violation.
-- **`assert` and `run.fail(reason)` are for "cannot continue"** — the rig did
-  not build, the policy file is missing. Both stop the body immediately and
-  mark the run `FAILED`.
-- **`run.skip(reason)` is for an unmet precondition**, not for a failure.
-- **`run.set_outcome(...)` overrides the checks**, for a scenario whose
-  judgement is more subtle than a conjunction. An unexpected exception overrides both and reports `ERRORED`;
-  assertion failures and `run.fail` instead produce `FAILED`.
+Match evidence to the claim: geometric clearance is not measured contact,
+and a commanded grasp is not a measured lift. Label proxies as proxies.
 
-Checks land in `results` under the reserved `checks` key. `antioch scenario
-show` displays them in a dedicated checks row. Do not write that key yourself.
+On normal completion, any failed check gives `FAILED`; all passing checks
+or no checks give `PASSED`. No checks proves only that execution completed.
+Derive task summaries from all required checks; a successful planner or
+substep does not cancel a failed task criterion.
+`run.fail` and assertion failures stop the body with `FAILED`;
+`run.skip` reports an unmet precondition. `run.set_outcome` overrides
+checks, but unexpected exceptions still produce `ERRORED`.
 
-## Parameterize with cases
+Keep thresholds and summaries in JSON results. Do not write the reserved
+`checks` key. Put detailed tables, images, and other files in artifacts;
+`output` and `telemetry` are reserved platform artifact names. Preserve
+failed measurements and images.
 
-Cases turn one authored scenario into many runs that share a name, so a suite
-compares like with like:
+## Telemetry and read-back
 
-```python
-@antioch.scenario(
-    tags=["vial"],
-    cases=[
-        antioch.case(id="nominal", tags=["smoke"]),
-        antioch.case({"friction": 0.15}, id="slippery", tags=["edge"]),
-        antioch.case(grid={"seed": range(50)}, id="seed-{seed}"),
-    ],
-)
-def vial_place(run: antioch.ScenarioRun, seed: int = 1, friction: float = 0.6) -> None: ...
-```
+A reusable module-scope `antioch.Logger` resolves the active run on each
+call. Use `scalar` for metrics, `image` for raw RGB/RGBA review frames,
+and `value` for Rerun archetypes. Image calls take a path and then pixels:
+`logger.image("camera/front", rgb)`. Read [telemetry](references/telemetry.md)
+when choosing image encoding, timelines, geometry, layouts, or diagnosing RRDs.
 
-`antioch.case(params, *, grid=..., combinations=..., id=..., tags=...)` gives a
-singleton, a Cartesian grid, or correlated rows. `id` is a `str.format`
-template over the resolved parameters; omit it for stable derived ids. Tag
-cases so a suite can select them (`smoke` for the fast path, `cert` for the
-long one), and declare the suites themselves under `suites:` in
-`antioch.yaml` — the `antioch-platform` skill owns the selector shape.
+Automatic viewport capture is a bounded diagnostic sampler, not a task check.
+It neither aims the camera nor proves physical correctness. Disable it with
+`capture=False` when dedicated evidence makes it unnecessary.
 
-Use separate cases for independent outcomes, retries, or comparisons. Use
-an internal loop when the iterations form one evaluation or dataset with a
-shared lifecycle. Record per-iteration detail when aggregate results would
-hide failures. Review the expanded case count before submitting it.
+After execution, read terminal checks/results and the artifacts needed for the
+claim with `antioch scenario list`, `show`, and `download`;
+see [run inspection](../antioch-platform/references/scenarios.md).
+Inspect decoded images and timestamps when relevant. Run counts or smooth
+video alone do not establish repeatability or correct physical behavior.
 
-## Record the evidence
-
-```text
-ScenarioRun.add_result(name: str, value: Any) -> None
-ScenarioRun.add_results(results: dict[str, Any]) -> None
-ScenarioRun.add_artifact(path: str | Path, *, name: str | None = None, content_type: str | None = None, description: str | None = None) -> None
-```
-
-- Results must be valid JSON and fit in the saved scenario results. Put the summary
-  there, such as thresholds, counts, and aggregate error, and save a
-  per-episode table as an artifact.
-- Artifacts upload directly from the Python process to object storage. Any media type
-  is fine. Give each one a one-line `description` (at most 140 characters) saying
-  what the file is — the console's download menu and `antioch scenario show`
-  display it beside the name:
-  `run.add_artifact("outputs/summary.json", description="Per-case contact summary")`.
-  Two names are reserved with pinned shapes: `telemetry` is the session's own
-  `.rrd` recording (`application/vnd.rerun.rrd`), and `output` is the runner's
-  captured stdout/stderr (`output.log`, `text/plain; charset=utf-8`, at most
-  4 MiB).
-- Record the thresholds a check used, not just its verdict. A reader six weeks
-  later needs to know what "passed" meant.
-
-## Default telemetry
-
-Antioch creates a recording and derives a layout from the data that arrives.
-A run with no samples does not automatically have a useful dashboard:
-
-- **A diagnostic read-back of Kit's active viewport.** Once physics is
-  stepping, the platform logs one JPEG to `/antioch/viewport` about twice a
-  simulated second, 640 px wide, capped at 600 frames. It does not select,
-  aim, or focus a camera. A USD camera at `/World/Camera` is not automatically
-  the active viewport camera. Never use this uncontrolled picture as the only
-  visual evidence for a bench-scale task.
-- **A viewer layout derived from what was logged** — a 2D view per entity
-  carrying an image or video, authored images first and
-  `/antioch/viewport` last, one time-series view per scalar path, and a 3D
-  view only when a drawable 3D archetype exists. `Transform3D` positions
-  geometry but draws no mesh, box, or point by itself.
-- **`sim_time` as the default viewer timeline.** The stored time panel names
-  it explicitly, so playback does not open on `wall_time`.
-- **The viewer's control panels collapsed by default**: the blueprint tree,
-  selection inspector, and time panel do not take space from telemetry, and
-  the collapsed time panel still shows the narrow timeline under the
-  viewports. Give a panel an explicit state only when the reviewer needs it.
-
-Capture rides the physics-step callback, never changes the run's outcome, and
-reports what it got at the end (`viewport telemetry captured N frames over
-X.Xs of simulation, N.N per second`), naming on the same line the cadence
-ticks skipped while a read-back was pending and whether the 600-frame cap
-stopped it. It warns when every frame is black, underexposed, overexposed, or
-nearly uniform. Those warnings diagnose the active viewport; they do not
-replace a scenario check. Turn platform capture off when a dedicated camera is
-the complete visual record, or when its cost is not justified:
-`@antioch.scenario(capture=False)`, `Scenario(..., capture=False)`, or
-`ANTIOCH_TELEMETRY_CAPTURE=0`.
-
-Rerun shows explicit samples, not the USD stage. Each `Logger` call writes one
-value at the current `sim_time` when simulation time is available; it does not discover scene objects, preserve
-an unlogged state, or backfill earlier time. If the first camera and drawable
-3D samples arrive at 3 s, those panes are empty before 3 s even though the
-assets already exist in Kit.
-
-When visual review is required, emit an initial useful state after reset and
-camera setup: the authored image, any required drawable scene geometry, and
-baseline metrics. Then log again when the evidence changes, and log every
-state change and the terminal state at the moment it happens, whatever the
-sampling cadence: a periodic-only sampler can miss the final `done`. The
-scenario decides those moments; there is no required step count or telemetry
-cadence. If platform capture would record the uncontrolled camera before the
-owned camera is ready, aim it before the first rendered step or set
-`capture=False`.
-
-## Own the review camera
-
-Choose a view that shows the task. For a classic World viewport, aim the
-actual active camera after reset, render, then read back. A named USD camera
-does not automatically select itself as the viewport. A dedicated render
-product is useful when calibration or independence from the livestream matters.
-
-Check decoded shape/range, then task content: projected subject bounds,
-semantic-mask pixels, or another feature that proves the subject is visible.
-Mean and variance alone cannot distinguish the right scene from a well-lit
-empty one. Dark or low-contrast scenes may be intentional; no fixed exposure
-band is correct for every task.
-
-Keep diagnostic frames when checks fail. Log the image and the failed
-measurement; do not hide the evidence by publishing only accepted frames.
-See the Isaac Sim sensor/rendering references for capture ownership and units.
-
-## Log your own telemetry
-
-One logger at module scope, reused; it holds a prefix and resolves the active
-run on every call, so the same helper works in a scenario and in an ordinary
-script.
-
-```text
-antioch.Logger(prefix: str = "") -> Logger
-Logger.scalar(path: str, value: float) -> None
-Logger.image(path: str, pixels: Any, *, max_width: int = 960, jpeg_quality: int = 65) -> None
-Logger.value(path: str, obj: Any) -> None
-Logger.debug/info/warning/error(message: str, *, path: str = "logs") -> None
-```
-
-Pass a CPU-accessible RGB or RGBA array with shape `(height, width, 3 or 4)`
-to `Logger.image`, preferably `uint8` in `[0, 255]`. Alpha is discarded.
-Other dtypes are clipped and cast, not rescaled: convert known `[0, 1]` color
-samples to `[0, 255]` before logging, or they become nearly black. Copy GPU
-buffers to CPU explicitly. Keep depth, masks, and other measurement data an
-evaluation reads back in lossless artifacts; what goes in the recording is
-the review representation.
-
-```python
-logger.scalar("metrics/tilt_deg", tilt_deg)
-logger.image("camera/bench", rgb)  # camera frames go here
-logger.value("metrics", {"error": error, "reward": reward})
-```
-
-**Log raw pixels through `Logger.image`, never `logger.value(..., rr.Image(...))`.**
-`image` downsamples and JPEG-compresses on the way in, the same compression
-the platform's own capture uses; a few hundred raw frames is the difference
-between an RRD somebody opens and one they give up downloading.
-The first normalized image fixes that entity's canvas for the recording.
-Later images fit that canvas without stretching, cropping, or enlargement;
-unused space is black. Use a new entity path for a separate camera canvas.
-
-`Logger.image` re-encodes whatever it is given, which changes a JPEG a CV
-service already produced. A frame that is already encoded goes through
-`logger.value(path, rr.EncodedImage(contents=jpeg_bytes, media_type="image/jpeg"))`
-unchanged, and metric depth goes through
-`logger.value(path, rr.DepthImage(depth_m, meter=1.0))`; the default layout
-gives each a 2D view. Depth is stored as raw floats, so sample it sparingly.
-
-Sample cameras at a rate a person would watch — a handful of frames per
-simulated second — and prefer more frames at a smaller size over a few
-enormous ones. Choose size and compression from the evidence needed, and
-read the size back: finalize logs `telemetry recording is 131.2 MiB, 2.2 MiB
-per simulated second`, and warns above 256 MiB, past which the default
-layout is not derived.
-
-Antioch stamps every write with `wall_time`, and with `sim_time` once Kit is
-running. One call is one sample at that current time; later calls do not fill
-an earlier gap. Stored blueprints default playback to `sim_time`. Within an Antioch-managed recording, do not replace its sinks or clock with
-`rr.init`, global connection/time calls, or a separate blueprint stream.
-Use `run.set_blueprint` for the active recording.
-
-## Choose a layout, or don't
-
-The automatic blueprint leads with authored cameras, puts platform viewport
-capture last, selects `sim_time`, and collapses all control panels. Author a
-layout only when the evidence needs a specific composition.
-
-```python
-run.set_blueprint(rrb.Blueprint(rrb.Horizontal(rrb.Grid(*views), rrb.Grid(*series))))
-```
-
-An author blueprint replaces the automatic one **entirely** — include a view
-for every entity you still want visible. Include `/antioch/viewport` only when
-that diagnostic view helps. Name a container (`Grid`, `Horizontal`,
-`Vertical`) as the root: a bare list of views serializes as a tab container,
-which shows one pane and hides the rest. Omit control panels unless the review
-needs one; the SDK supplies a collapsed time panel on `sim_time`, which keeps
-the timeline under the viewports. Keep the time panel collapsed when a reviewer needs the scrubber;
-hiding it removes that control.
-[references/telemetry.md](references/telemetry.md) owns the verified 0.36.0
-constructors, `SpatialInformation`, and the live-versus-recorded flow.
-
-## Watch it live
-
-Attached `antioch scenario run` and `antioch suite run` request the session's
-livestream by default and share `--stream/--no-stream`; a detached run is
-headless. Each scenario reserves the session's livestream while its simulation
-process runs, and the attached command shows progress until the run finishes.
-Inspect the recorded telemetry and artifacts after completion. A native script
-under `antioch service exec` and a Jupyter kernel use the same single
-livestream slot; `service exec` takes the same `--stream/--no-stream` pair,
-and a kernel must be assigned the stream before simulator startup. There is no
-stream size or rate field in `antioch.yaml`. `SimulationConfig.renderer_quality`
-is the one picture control: its tier sets the stream budget and the browser
-fits its own window inside it, rounding to the encoder grid. Sensor camera
-resolutions stay independent. Streaming keeps the native
-60 FPS default, not a guaranteed delivery rate or a simulation timestep.
-Antioch has no FPS control. Use `extra_args` for native Isaac settings.
-
-## Run it and read it back
-
-```bash
-antioch scenario collect                                   # discovery and schema errors, locally
-antioch scenario run --scenario vial_place                  # one scenario, attached
-antioch suite run smoke                                    # a declared suite
-antioch scenario show SCENARIO_RUN_ID                      # verdict, checks, results, artifacts
-antioch scenario logs SCENARIO_RUN_ID                      # captured output
-antioch scenario download SCENARIO_RUN_ID                  # the .rrd and every artifact
-```
-
-After a requested run, inspect the evidence needed for that task. Changing
-checks alone does not require adding a camera, 3D geometry, or a viewer step
-to a scalar-only or simulator-free evaluation:
-
-1. `antioch scenario show SCENARIO_RUN_ID` — is the outcome the task's
-   outcome, and does every criterion you meant to declare appear?
-2. Download required artifacts with `antioch scenario download SCENARIO_RUN_ID`.
-   Read the telemetry back with the same `rerun-sdk==0.36.0` the SDK pins:
-   `rerun rrd stats <file>` and `rerun rrd print <file> | head` from the
-   shell, `rerun.experimental.RrdReader` from Python, to inspect the expected
-   entity paths and sample timestamps. The dataframe API of older Rerun
-   releases and the DataFusion extra are not part of the pinned environment.
-   Simulation samples need `sim_time`; simulator-free measurements use their
-   available timeline.
-3. When images are evidence, decode them and apply the task-specific content oracle.
-   Check timestamps and retained failure samples. Nonzero mean is not proof.
-4. When visual layout or playback is in scope, open the recording in the viewer.
-   Check the required panes and timeline. An authored camera should lead when
-   it is the primary evidence; a requested 3D pane must draw geometry rather
-   than empty axes. Report any viewer check that could not run.
-
-Managed native, scenario, and suite execution use sessions. Attached scenario execution is serial on the selected live session;
-ordinary headless service commands can run alongside it. Background work reuses revision-pinned
-background sessions with automatic fan-out within quotas and capacity. Their
-source comes from Dockerfile `COPY`; there are no per-run source bundles.
-Reruns use pinned images and parameters, not unbuilt interactive edits.
-Scenario and suite records keep outcomes and evidence
-independently and never own session compute or usage.
-
-Deeper read-back — filtering run history, per-service logs, artifact keys,
-deletion — is the `antioch-platform` skill's scenarios reference; suite
-follow-up and cancellation is its suites reference.
-
-## Checklist
-
-Apply camera, 3D, and viewer checks only to the visual evidence the task needs.
-Scalar-only and simulator-free evaluations still need measured criteria and
-result readback, not an invented visual workload.
-
-- [ ] Every criterion the task defines is a `run.check` with a measured `detail`.
-- [ ] `assert` / `run.fail` appear only where the run genuinely cannot continue.
-- [ ] Cases represent independent outcomes; internal loops retain required detail.
-- [ ] Thresholds are in `results`; per-episode detail is an artifact.
-- [ ] Raw camera frames go through `Logger.image`; pre-encoded JPEGs and
-      metric depth go through `Logger.value` as Rerun archetypes.
-- [ ] The review camera is aimed after reset, rendered, decoded, and validated
-      before its frame is accepted.
-- [ ] A task-specific oracle proves the subject is in frame; mean/std only
-      screen exposure and flat captures.
-- [ ] Entity paths are a stable hierarchy a blueprint can select without
-      knowing per-run values.
-- [ ] The earliest useful rendered step logs one complete camera, drawable 3D,
-      and metric state; setup and settle time do not leave an unexplained gap.
-- [ ] A 3D view has a drawable archetype such as `Boxes3D`, `Points3D`, or a
-      mesh; transforms alone are not visible.
-- [ ] Lighting and image checks match the task; failure frames remain available.
-- [ ] The blueprint timeline matches the recorded measurements; required viewer
-      checks ran, or are reported as unrun.
+For imported scenario calls or notebook/local recording, read
+[caller recording](references/recording.md). Native simulator APIs belong to
+[Isaac Sim](../isaac-sim-6/SKILL.md), [Isaac Lab](../isaac-lab-3/SKILL.md),
+and [research](../antioch-research/SKILL.md).

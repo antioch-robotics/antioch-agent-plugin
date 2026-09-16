@@ -1,49 +1,40 @@
 # Environment authoring and rollout
 
-Use this when building a Lab environment, changing manager terms, registering
-a task, debugging reset/step behavior, or preparing demonstration datasets.
-The parent skill owns startup,
-runtime pins, quaternion ordering, and array access.
+Use this for Lab environment structure, manager terms, reset/step behavior,
+task registration, RL adapters, and demonstration datasets. The parent skill
+owns startup, pins, quaternion order, and array access.
 
 ## Choose the environment boundary
 
-A manager-based task separates scene, actions, observations, rewards,
-terminations, and events into configuration. A direct environment owns those
-operations in code. Start with the model that fits the existing project;
-do not introduce managers solely to wrap a small working direct task.
+A manager-based task puts scene, actions, observations, rewards, terminations,
+and events in configuration. A direct environment owns them in code. Match the
+existing project; do not wrap a small direct task in managers just for shape.
+Define config classes inside a post-startup factory and use a shipped,
+validated asset/config rather than a placeholder path.
 
-Define config classes inside a factory so local discovery does not import
-the simulator. Use a shipped robot config or a validated asset rather than
-a placeholder USD path presented as a runnable example.
+Resolve scene names and every `SceneEntityCfg` selector against actual ordered
+joint/body names, including unrestricted `slice(None)`.
 
-The scene's asset names and `SceneEntityCfg` selectors must agree. Resolve
-joint/body selectors against actual names, including the unrestricted
-`slice(None)` case.
+## State transition and reset
 
-## The state transition
+Specify observation schema/history/noise/frame; action shape/order/scale/limits,
+actuator mode, and control period; reward terms, signs, weights, units, and
+aggregation; success/failure terminations versus time-limit truncation; and a
+reset for robot pose/velocity, joints, objects, sensors, and task buffers.
 
-For an RL environment, specify:
+An events config replaces the selected event behavior. Resetting a base pose
+does not reset joints or task state unless those terms are included. Test a
+reset after a disturbed episode, not only after construction.
 
-1. Inputs: observation schema, history, noise, and frame.
-2. Actions: shape, joint order, scale, limits, actuator mode, and control period.
-3. Reward: each term, sign, weight, units, and aggregation.
-4. Termination: actual failures/success conditions versus time-limit truncation.
-5. Reset: robot pose and velocity, joints, objects, sensors, and task state.
+`ManagerBasedRLEnv.step` returns `(observation, reward, terminated, truncated,
+extras)`. Preserve the distinction for value bootstrapping and honor the
+selected wrapper's autoreset contract.
 
-An events config replaces the selected event behavior; a base-pose reset alone
-does not reset joint state or task buffers. Retain a complete default reset
-or supply all required reset terms. Test a reset after a disturbed episode,
-not just after initial construction.
+## Small startup probe
 
-`ManagerBasedRLEnv.step` returns observation, reward, terminated, truncated,
-and extras. Distinguish termination from truncation when bootstrapping value
-targets. Respect the selected environment/wrapper's autoreset contract.
-
-## A small recorded startup probe
-
-This uses the shipped cart-pole config, not a generic robot with guessed
-drives. It checks finite rewards and completed episodes; it does not certify a
-trained balancing policy. The scenario runner starts Lab before the body.
+Use a shipped task to test lifecycle and tensor shapes before changing a
+robot. This probe checks finite rewards and that an episode completes; it is
+not a trained-policy test.
 
 ```python
 import antioch
@@ -56,80 +47,65 @@ def cartpole_rollout(run: antioch.ScenarioRun, steps: int = antioch.param(600, g
     from isaaclab_tasks.manager_based.classic.cartpole.cartpole_env_cfg import CartpoleEnvCfg
 
     cfg = CartpoleEnvCfg()
-    cfg.scene.num_envs = 4
-    cfg.seed = seed
+    cfg.scene.num_envs, cfg.seed = 4, seed
     env = ManagerBasedRLEnv(cfg=cfg)
     try:
         env.reset()
-        episode_return = torch.zeros(env.num_envs, device=env.device)
+        total = torch.zeros(env.num_envs, device=env.device)
         action = torch.zeros(env.action_space.shape, device=env.device)
-        completed = []
-        finite_rewards = True
+        completed, finite = [], True
         for _ in range(steps):
             _, reward, terminated, truncated, _ = env.step(action)
-            finite_rewards = finite_rewards and bool(torch.isfinite(reward).all())
-            episode_return += reward
+            finite &= bool(torch.isfinite(reward).all())
+            total += reward
             done = terminated | truncated
-            completed.extend(episode_return[done].tolist())
-            episode_return[done] = 0
+            completed.extend(total[done].tolist())
+            total[done] = 0
     finally:
         env.close()
-
-    run.check("finite rewards", finite_rewards)
+    run.check("finite rewards", finite)
     run.check("episodes completed", bool(completed), detail=f"{len(completed)} completed episodes")
     run.add_result("episodes_completed", len(completed))
     if completed:
         run.add_result("mean_episode_return", sum(completed) / len(completed))
 ```
 
-Inspect observations, actions, and physical state too when evaluating a new
-task. Adapt the checks to the requested behavior rather than calling this
-smoke probe a success test.
+For a real task, also inspect observations, actions, physical state, reset
+completeness, and task-specific checks. Do not call this probe policy success.
 
-## Registration and RL integration
+## Registration and RL
 
-Gym registration maps an environment ID to an environment class and config
-entry points. RL agent configs are additional registration kwargs consumed
-by their training adapters; they do not require replacing the environment's
-entry point with an RL library.
+Gym registration maps an environment ID to its class/config entry point. RL
+agent configuration is additional registration data consumed by the training
+adapter; it does not replace the environment entry point. Resolve the pinned
+`module:attribute` or callable from task-registration examples.
 
-Use the pinned task-registration and training examples to resolve a
-`module:attribute` config entry or callable. Direct construction with `cfg=`
-is useful for a small probe; a registered task fits shared training tools.
+Wrap the environment with the installed RL library's supported adapter and
+match its reset, observation/action, runner, and checkpoint contracts. Save
+config and asset identity with a checkpoint and load it in a fresh evaluation
+run.
 
-Wrap the environment with the installed RL library's supported adapter.
-Match its observation/action and reset semantics, runner config, and
-checkpoint format. Save a checkpoint with enough config and asset identity
-to load it into a fresh evaluation run.
+For URDF/MJCF conversion, `isaaclab.sim.converters` wraps the import pipeline;
+inspect its options rather than assuming importer defaults. Validate the
+resulting composed USD and physical asset through the Isaac Sim asset workflow.
 
-For URDF/MJCF conversion, Lab's `isaaclab.sim.converters` wraps the import
-pipeline. Inspect the chosen converter's options and output rather than
-assuming identical drive or instanceability settings across importers.
-The Isaac Sim asset reference owns composed-USD and physical validation.
+## Demonstrations and imitation
 
-## Demonstrations and imitation learning
+Teleoperation, demonstration replay, and Lab Mimic are separate from
+Replicator image generation. Retrieve matching pinned recording, replay,
+Mimic annotation/generation, and policy-training examples. Keep task identity,
+action frame/control mode, observations, subtask boundaries, and success
+criteria consistent.
 
-Human teleoperation, demonstration replay, and Isaac Lab Mimic are a separate
-workflow from Replicator image generation. Retrieve the pinned Lab recording,
-replay, Mimic annotation/generation, and policy-training examples together.
-Keep task identity, action frame/control mode, observations, subtask boundaries,
-and success criteria consistent through that sequence.
+The pinned `scripts/tools/record_demos.py` writes successful episodes to HDF5;
+optional MCAP is teleoperation debugging output, not the training dataset.
+Keep attempted, failed, and accepted counts separate. Mimic requires task-space
+actions and subtask annotations; convert joint-space demonstrations as the
+documented pipeline requires.
 
-The pinned `scripts/tools/record_demos.py` exports successful episodes to HDF5.
-Its optional MCAP recording is teleoperation debugging output, not the training
-dataset. Check exported episode counts and replay a sample; preserve attempted,
-failed, and accepted counts separately rather than calling every attempt a
-successful demonstration. Mimic needs task-space actions and subtask
-annotations; a joint-space demonstration needs the documented conversion.
-
-The upstream recording script owns an `AppLauncher`. Adapt startup and lazy
-imports for the selected Antioch path; do not create a second app inside a
-scenario. Confirm a working remote input path before promising keyboard,
-SpaceMouse, or XR collection. Upstream device support does not prove Antioch
-device forwarding or CloudXR availability, and does not authorize host-device
-or network changes. Existing datasets can support an offline starting point
-when human input is unavailable.
-
-Archive completed datasets and checkpoints as run artifacts. Validate them
-through the intended reader in a separate run before scaling collection or
-training; report unrun input, replay, and policy-evaluation checks explicitly.
+The recording script's `AppLauncher` and input device path must match the
+selected Antioch workflow. Upstream keyboard, SpaceMouse, XR, or CloudXR
+support does not prove remote input forwarding. Validate dataset counts and
+replay a sample through the intended reader before scaling collection or
+training. Archive datasets/checkpoints as run artifacts and report unrun
+checks.

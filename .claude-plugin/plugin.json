@@ -1,7 +1,7 @@
 {
   "name": "antioch",
-  "version": "0.2.88",
-  "description": "Adds Antioch simulation engineering to Codex and Claude Code: build scenarios, run evaluations, inspect evidence, and research the simulation stack",
+  "version": "0.2.136",
+  "description": "Write local Python and run native Isaac on Antioch cloud GPUs: create projects, research APIs, inspect live images, improve simulations, and evaluate recorded scenarios",
   "author": {
     "name": "Antioch"
   },

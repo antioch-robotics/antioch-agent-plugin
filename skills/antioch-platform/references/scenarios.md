@@ -1,84 +1,65 @@
-# Work with scenario history
+# Scenario execution and history
 
-A scenario is a saved simulation test. Each run includes its selected
-inputs, resolved service image digests, outcome, checks, named results, logs,
-telemetry, and artifacts.
+A scenario definition is a Python function decorated with `@antioch.scenario`.
+Its parameters describe inputs; cases provide named input sets. Each invocation
+has a distinct run ID and record containing author, timestamps, inputs, checks,
+results, and artifact descriptors. Phase describes execution progress; outcome
+describes its verdict. Use `scenario-design` for the Python authoring contract.
 
-## Preview and submit
+Managed runs pin service images and retain process output. Existing scripts
+and notebooks can also record through the SDK without CLI dispatch; see
+[recording existing code](../../scenario-design/references/recording.md).
+Caller-owned records have no revision or managed rerun.
 
-Collection imports scenario modules on the client and spends no remote
-compute:
-
-```bash
-antioch scenario collect
-```
-
-Keep Isaac imports inside scenario functions so collection works without
-Isaac installed.
-
-Submit one scenario. Interactive submissions report progress until they
-finish:
+## Collect and run
 
 ```bash
+antioch scenario collect --json
 antioch scenario run --scenario falling_cube --set drop_height=4.5
 ```
 
-Use `antioch scenario run --help` for case, tag, path, and output selection.
-The command validates the selection before it submits a run.
+Collection imports local source without allocating compute or executing the
+scenario body. Inspect names, typed parameters, cases, and source paths before
+submission; collection does not prove that native API calls or task logic work.
 
-By default, scenario execution uses the project's interactive session and stays
-attached until the run finishes. Add `--detach` for unattended execution on
-reusable background sessions. The scenario record stays independent of the
-session and retains its result after that session stops.
+Default dispatch uses the project's interactive session, creating one only
+if absent. See [execution modes](sessions.md#choose-the-execution-mode) for
+background dispatch and follow options. `--case` selects authored inputs;
+`--set` supplies typed overrides, and they cannot be combined. Use `--no-stream`
+beside an existing GUI producer. Follow shows progress and verdicts;
+`--verbose` adds captured process output. Check leaf help for other options.
 
-An attached run requests the session's GUI stream by default and shares
-`--stream/--no-stream` with `antioch suite run`; a detached run is headless.
-Each scenario reserves the session livestream while its simulation process
-runs; Mission Control can show that stream.
-
-## Read the result
-
-```bash
-antioch scenario show SCENARIO_RUN_ID --json
-antioch scenario logs SCENARIO_RUN_ID
-antioch scenario download SCENARIO_RUN_ID
-```
-
-Read the terminal state, checks, and error before you diagnose a failure. The
-download command retrieves the saved output bundle, including recorded
-viewer data when present.
-
-Use the webapp to compare parameters, checks, numeric results, logs,
-telemetry, and artifacts on one page.
-
-## Find a run
+## Find and analyze
 
 ```bash
 antioch scenario list --json
 antioch scenario suggest tag --json
+antioch scenario show SCENARIO_RUN_ID --json
+antioch scenario logs SCENARIO_RUN_ID --json
+antioch scenario download SCENARIO_RUN_ID --json
 ```
 
-Discover stored values before adding a filter. Use
-`antioch scenario list --help` and `antioch scenario suggest --help` for the
-current searchable fields.
+List filters include scenario, suite, tags, parameters, results, phase/outcome,
+author, and time. `--user` or `--mine` selects authors; project scope
+defaults to the current project, with `--all-projects` for wider history.
+Use leaf help for predicate syntax and paging; pass returned cursors unchanged.
+Suggest discovers values such as tags, names, project, and author.
 
-## Cancel or repeat work
+Read checks and errors, not just terminal outcome. Compare params, case IDs,
+revision/images, timings, and result values; download relevant evidence.
+Finite JSON goes to stdout, progress/errors to stderr. Followed JSON is
+line-delimited; structured errors include `retryable`.
+
+## Cancel, rerun, delete
 
 ```bash
 antioch scenario cancel SCENARIO_RUN_ID
 antioch scenario rerun SCENARIO_RUN_ID
 ```
 
-Cancellation records a terminal result and signals active work. Completed
-evidence remains.
+Cancel signals active work and preserves completed evidence. A rerun creates
+new records using saved images and inputs, not local edits. It does not promise
+identical physics or timing. Caller/source-free records lack managed reruns.
 
-A rerun receives a new ID and uses the original immutable project revision and
-parameters. Unbuilt interactive edits are not preserved. It does not replace
-the original run, rebuild, resolve mutable
-tags, or use current local files. This preserves submitted inputs, not
-execution conditions: scheduling, capacity, simulator timing, and external
-asset availability can change, so a rerun can have a different outcome or
-duration.
-
-Use `antioch scenario delete --run SCENARIO_RUN_ID` only when the user
-explicitly wants to remove a scenario run from history.
+`antioch scenario delete --run SCENARIO_RUN_ID` removes history; use it only
+when deletion is requested.

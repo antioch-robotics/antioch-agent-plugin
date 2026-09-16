@@ -1,6 +1,6 @@
 # Antioch Agent Plugin
 
-Guidance and research tools for agents working with
+Project guidance, research, and interactive simulation tools for agents working with
 [Antioch](https://antioch.com). The plugin helps an agent work in your existing
 project, write native Isaac code, run requested evaluations on remote compute,
 and inspect their recorded evidence. It does not install a simulator locally
@@ -12,8 +12,9 @@ changes. Background work builds the same Dockerfile and runs within quotas.
 
 | Skill | Responsibility |
 |---|---|
-| `antioch-platform` | Project setup, service graphs, sessions, CLI workflows, assets, runs, suites, and Jupyter |
-| `antioch-research` | Search and inspect hosted, versioned vendor documentation and source |
+| [agentic-simulation](skills/agentic-simulation/SKILL.md) | Workflow entry point: research, design, build, measure, and improve within the requested scope |
+| [antioch-platform](skills/antioch-platform/SKILL.md) | Companion programming/cloud model, projects, services, sessions, CLI/YAML, assets, scenarios, and suites |
+| [antioch-research](skills/antioch-research/SKILL.md) | Search across hosted vendor documentation and source to choose methods, connect libraries, and ground APIs |
 | `isaac-sim-6` | Isaac Sim 6.0.1 physics, USD, assets, sensors, navigation, manipulation, rendering, and datasets |
 | `isaac-lab-3` | Isaac Lab 3.0.0-beta2 environments, managers, controllers, and RL integration |
 | `scenario-design` | Cases, measured verdicts, artifacts, Rerun telemetry, and review layouts |
@@ -23,9 +24,43 @@ Research exposes six tools: `research_search`, `research_artifacts`,
 Call the version tool to see current coverage; documentation crawls and source
 pins are not interchangeable.
 
+The `antioch-jupyter` MCP server (launched by `antioch-jupyter-mcp`) exposes
+`jupyter_connect`, `jupyter_kernels`, `jupyter_execute`, `jupyter_kernel`, and
+`jupyter_disconnect`. They connect to the current project's session, list or
+select kernels, run arbitrary stateful cells, return their output and images,
+and recover an exact kernel. Execution has no implicit viewport capture.
+Project files, builds, native scripts, scenarios, suites, and saved evidence
+use the existing SDK and CLI.
+
+An authoring request includes a runnable local project: environment, source,
+`antioch.yaml`, and a service image with the required runtime. Built images must
+include source; an interactive image-only service can use source sync. An existing project
+is repaired in place. A plain Python script does not need a scenario decorator,
+but it still needs project configuration for remote dispatch. A question alone
+does not authorize files, installs, or compute.
+
 The plugin uses your existing Antioch identity. Research queries go to the
-hosted index; simulation dispatch and transport use the ordinary CLI/session
-interfaces. It bundles no agents that run independently of your harness.
+hosted index; Jupyter transport uses the ordinary CLI/session interfaces. It
+bundles no agents that run independently of your harness.
+
+## How the skills are maintained
+
+Agentic simulation owns the workflow; the platform skill owns CLI/YAML and
+compute concepts. Scenario design owns Python evaluation APIs; the Isaac skills
+supply native simulator knowledge. Research connects these skills to evidence.
+Task-specific links route to the next useful skill or reference, not a required
+reading sequence through the whole library.
+
+Isaac Sim references preserve NVIDIA's domain guidance, examples, and topic
+structure with a small Antioch adaptation layer: remote execution, startup,
+import safety, extension configuration, and evidence-backed corrections.
+Each reference links its upstream commit. We check that guidance against the
+shipped engine version rather than tracking `develop` blindly. We simplify
+duplicated instructions, not the domain knowledge needed to build a simulation.
+
+Linked upstream helper scripts are source examples, not installed commands.
+Local installation and upstream agent-orchestration instructions are outside
+this plugin. [NOTICE](NOTICE) records provenance and licensing.
 
 ## Install and inspect setup
 
@@ -38,7 +73,7 @@ antioch setup --dry-run
 
 Setup installs the deployed SDK and its exact paired plugin for every Claude
 Code or Codex client on PATH; a host without an agent gets only the SDK. The SDK
-supplies both `antioch` and `antioch-research-mcp`. Keep those programs on the
+supplies `antioch`, `antioch-research-mcp`, and `antioch-jupyter-mcp`. Keep them on the
 PATH inherited by the agent. An explicit existing `--python .venv/bin/python`
 targets a project environment instead of a global uv tool. Setup never edits a
 shell profile.
@@ -62,9 +97,7 @@ plugin/MCP status and approvals; an installed plugin is not proof that Research
 is reachable. Ask the agent to call `research_versions` when that check is
 within the task.
 
-Mission Control supplies its own tools and identity. Do not replace its hosted
-login or toolchain with a local setup workflow. Setup does not create a project
-or start a simulation session.
+Setup does not create a project or start a simulation session.
 
 ## Use it
 
@@ -120,7 +153,7 @@ login remain until explicitly removed.
   ask the agent to call `research_versions`.
 - **Research authentication error:** inspect `antioch auth whoami` and follow
   the returned login instruction. Do not switch organization/deployment to
-  hide the error. Hosted workspaces use their provided identity.
+  hide the error.
 - **Research service unavailable:** report the returned error. Official
   source at the matching pin or checked-in types can provide a labeled
   fallback, but are not live verification.

@@ -1,7 +1,7 @@
 {
   "name": "antioch",
-  "version": "0.2.88",
-  "description": "Adds Antioch simulation engineering to Codex and Claude Code: build scenarios, run evaluations, inspect evidence, and research the simulation stack",
+  "version": "0.2.136",
+  "description": "Write local Python and run native Isaac on Antioch cloud GPUs: create projects, research APIs, inspect live images, improve simulations, and evaluate recorded scenarios",
   "author": {
     "name": "Antioch"
   },
@@ -18,7 +18,7 @@
   "interface": {
     "displayName": "Antioch",
     "shortDescription": "Build and evaluate simulations with Antioch",
-    "longDescription": "Work from an existing robotics repository to build Antioch simulations, evaluate scenarios and suites, inspect recorded evidence, and research versioned simulation documentation and source.",
+    "longDescription": "Start in an empty folder or an existing robotics project. Write native Isaac Python without a local simulator install, run it on Antioch cloud GPUs, inspect images and state, improve the code, and evaluate scenarios and suites from recorded evidence.",
     "developerName": "Antioch",
     "category": "Developer Tools",
     "capabilities": [
