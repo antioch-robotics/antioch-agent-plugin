@@ -1,6 +1,6 @@
 {
   "name": "antioch",
-  "version": "0.2.136",
+  "version": "0.2.165",
   "description": "Write local Python and run native Isaac on Antioch cloud GPUs: create projects, research APIs, inspect live images, improve simulations, and evaluate recorded scenarios",
   "author": {
     "name": "Antioch"
