@@ -1,6 +1,6 @@
 ---
 name: antioch-platform
-version: "1.5.7"
+version: "1.5.8"
 description: >-
   Explains Antioch's programming and cloud model and guides projects, CLI/YAML/SDK use, sessions, assets, scenarios, suites, results, and authentication. Load whenever Antioch is mentioned (including Anticoh), antioch.yaml or Antioch imports are present, or the conversation concerns Antioch. Supplies platform concepts alongside the agentic-simulation workflow entry point; routes native programming to the Isaac skills, cross-library research to antioch-research, and evaluation design to scenario-design.
 ---

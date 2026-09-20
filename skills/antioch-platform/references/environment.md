@@ -69,9 +69,9 @@ and requires authentication; it is not an offline validator.
 ## Images and source
 
 Init pins the installed SDK in `FROM antioch-engine/<engine>:<sdk-version>`.
-Untagged engine references are refused. The simulator role follows this image,
-not the service name. With multiple engine services, mark the runner using
-`x-antioch: {runner: true}`.
+Untagged engine references are refused. Scenario capability follows verified
+image metadata, not the service name. With multiple eligible services, select
+the target with `service=` in the scenario decorator.
 
 A generated Dockerfile sets `ANTIOCH_PROJECT_DIR`, uses
 `/workspace/project`, and ends with `COPY . .`. For custom dependencies,

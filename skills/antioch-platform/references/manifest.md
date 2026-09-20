@@ -24,9 +24,9 @@ services:
 ```
 
 Preserve an existing ID. At least one service is required, each with exactly
-one `image` or `build`. The engine image identifies the simulator role;
-the service name does not. With multiple engine-backed services, set
-`x-antioch: {runner: true}` on the intended runner.
+one `image` or `build`. Supported Antioch image metadata identifies
+scenario-capable services; service names do not. With multiple eligible
+services, select the target with `service=` in the scenario decorator.
 
 Supporting services can declare commands, environment, working directory,
 profiles, dependencies, health checks, resources, restart policy, and routes.

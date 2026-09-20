@@ -1,6 +1,6 @@
 ---
 name: scenario-design
-version: "1.4.4"
+version: "1.4.5"
 description: >-
   Guides Antioch evaluation design: scenarios, typed parameters and cases, measured checks, results, artifacts, caller recording, telemetry, and Rerun layouts. Use when authoring or reviewing scenarios and suites, defining pass/fail criteria, recording experiments, or diagnosing saved evidence and viewer output. Use antioch-platform for dispatch/history and the Isaac skills for simulator code.
 ---
@@ -57,9 +57,11 @@ one evaluation/dataset lifecycle. [Suite selectors](../antioch-platform/referenc
 group cases in YAML.
 
 Decorator keywords: `name`, `description`, `tags`, `cases`, `config`,
-`blueprint`, `capture`, `profile`, `restart_services`, `recording_timeout_s`.
+`blueprint`, `capture`, `service`, `profile`, `restart_services`, `recording_timeout_s`.
 
 Inspect the installed signature for defaults and types.
+`service` selects an active container derived from a supported Antioch image;
+omitting it uses the only eligible active service. It does not activate a profile.
 For background dispatch, `profile` includes its helper services in the revision.
 For interactive work, select profiles when starting the session with
 `antioch session new --profile perception`; dispatch reuses that session's revision.

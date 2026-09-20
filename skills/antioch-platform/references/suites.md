@@ -34,6 +34,13 @@ Interactive suites run serially in the project's session. Detached execution
 uses headless background capacity and can fan out within quotas. Follow/detach
 semantics match [scenarios](scenarios.md).
 
+Each child's `@antioch.scenario(service="fluoro")` selects its execution
+container; reruns retain that target. The service must be active and derive
+from a supported Antioch image. Leave services without profiles to start them
+together; when several are eligible, scenarios without `service=` are
+ambiguous. Live Rerun follows the active child; native Isaac/WebRTC video
+follows the selected service when it provides a stream.
+
 Interactive suites stop after a child fails, errors, or times out and cancel unstarted
 members. Detached suites continue the remaining cases, so use `--detach --follow`
 for a full comparison that must retain both passing and failing cases. This
