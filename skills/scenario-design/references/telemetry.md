@@ -1,6 +1,6 @@
 # Telemetry and viewer layouts
 
-The SDK and viewer use **Rerun 0.36.0**. Ground additional constructors in
+The SDK and viewer use **Rerun 0.38.1**. Ground additional constructors in
 that pin. Antioch owns recording sinks and clocks; do not call `rr.init`
 or replace them with global connection/time operations.
 
@@ -53,13 +53,17 @@ import rerun.blueprint as rrb
 
 run.set_blueprint(
     rrb.Blueprint(
-        rrb.Horizontal(rrb.Spatial2DView(origin="/robot/camera/front", name="Front"), rrb.TimeSeriesView(origin="/robot/metrics", contents="/robot/metrics/**"))
+        rrb.Horizontal(
+            rrb.Spatial2DView(origin="/robot/camera/front", name="Front"), rrb.TimeSeriesView(origin="/robot/metrics", contents="/robot/metrics/**")
+        ),
+        rrb.TimePanel(timeline="sim_time"),
     )
 )
 ```
 
 Set the blueprint while the run is active. It replaces the automatic layout,
-so include every required entity. Explicit containers show simultaneous panes;
+so include every required entity and select the timeline holding its samples.
+Explicit containers show simultaneous panes;
 bare views become tabs. `rrb.SpatialInformation` requires a `target_frame`
 matching the logged frame graph. Default collapsed panels preserve the scrubber.
 
@@ -72,7 +76,7 @@ Live telemetry separately requires the process's session stream grant.
 `run.live_uri` is `None` without a live sink.
 
 Download the run and read its file with pinned `rerun rrd stats`,
-`rerun rrd print`, or `rerun.experimental.RrdReader`. Older dataframe
+`rerun rrd print`, or `rerun.chunk.RrdReader`. Older dataframe
 APIs/DataFusion are not part of the environment. Check entity paths and sample
 times, decode relevant images, and open the layout when visual review is in
 scope. Empty panes often mean missing samples/drawables, wrong selectors or

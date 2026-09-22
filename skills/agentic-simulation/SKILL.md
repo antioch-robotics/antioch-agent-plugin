@@ -1,6 +1,6 @@
 ---
 name: agentic-simulation
-version: "1.2.4"
+version: "1.2.5"
 description: The workflow entry point for agents using Antioch to research, design, build, inspect, test, and improve simulations. Use for Antioch simulation questions and development, custom kernels and solver integration, parameter fitting, datasets, policy experiments, failure diagnosis, and saved-run analysis. Connects research, native Python, CLI, Jupyter, assets, scenarios, and suites in a measured engineering loop scoped to the request. Load antioch-platform alongside it for the programming/cloud model, core concepts, and CLI/YAML workflows.
 ---
 
@@ -47,7 +47,7 @@ approximations only when they are part of the agreed task.
 |---|---|
 | Research methods, APIs, assets, and examples across libraries | [Research MCP](../antioch-research/SKILL.md): search, expand, open, grep, inspect versions |
 | Set up or change compute, images, dependencies, and source | Platform [environment](../antioch-platform/references/environment.md), [manifest](../antioch-platform/references/manifest.md), and [session CLI](../antioch-platform/references/sessions.md) |
-| A script with a finite lifetime | `antioch service exec python src/main.py` |
+| A script with a finite lifetime | `antioch run src/main.py` |
 | Explore and modify a live scene | [Jupyter cells](references/jupyter.md) |
 | Inspect a viewpoint or sensor camera | [Navigation and capture](references/viewport.md) |
 | Repeatable checks over inputs | [Scenario design](../scenario-design/SKILL.md), then scenario or suite dispatch |

@@ -10,8 +10,8 @@ for repeatable evaluation.
 |---|---|---|
 | Default | Project's interactive session | After terminal result |
 | `--no-follow` | Same interactive session | After admission |
-| `--detach` | Headless background sessions | After admission |
-| `--detach --follow` | Same background execution | After terminal result |
+| `--background` | Headless background sessions | After admission |
+| `--background --follow` | Same background execution | After terminal result |
 
 Interactive compute supports scripts, shells, sync, routes, Jupyter, and
 serial recorded runs. It remains available after a run. Background dispatch
@@ -25,13 +25,21 @@ scenario/suite follow and cancel commands, not interactive service commands.
 ```bash
 antioch session status --json
 antioch session list --json
-antioch service exec python src/main.py
+antioch run src/main.py
+antioch run --no-stream src/main.py --seconds 60
+antioch service exec --service sim -- nvidia-smi
 ```
 
-Commands select the current user's project in the working directory, not a session ID.
-Exec reuses its interactive session or creates one when absent. It defaults
-to the simulator service, or the sole active service. Put `--service` and
-other Antioch options before the command; argv is passed literally.
+Run commands from the project directory to use its current interactive session.
+`antioch run src/main.py` executes `src/main.py` under the service's configured
+project directory (`/workspace/project` in generated projects).
+The local file must exist inside the project.
+`service exec` executes arbitrary commands. Both reuse the interactive session
+or create one when absent, defaulting to the simulator service or the sole
+active service. Put `--service`, `--profile`, and other Antioch options before
+the file or executable. `run` accepts an optional `--` immediately after the
+file and removes it. Remaining script arguments and `service exec` command
+arguments pass unchanged, including repeated flags.
 
 `antioch session new` builds a fresh revision and replaces the project's
 interactive session. It waits for readiness and copies initial source from
@@ -39,9 +47,12 @@ sync rules, without running watch restart/exec actions. Save remote files
 first. Active work prevents replacement unless authorized cancellation uses
 `--force`. Capacity or quota refusals do not authorize stopping other work.
 
-Exec streams output and exit status, forwards terminal input when applicable,
-and Ctrl-C stops the exact process, not the session. It requests the GUI stream
-by default; `--no-stream` leaves the session's single producer slot free.
+Both commands stream output and return the process's exit status. Their default
+timeout is 900 seconds; `--timeout` changes it. They detect interactive terminals
+automatically, with `--tty` and `--no-tty` to override detection. Ctrl-C stops the
+process and leaves the session available. Both request the GUI stream by default;
+`--no-stream` leaves the session's single producer slot free. A plain script
+creates no scenario or suite history unless it explicitly records a scenario.
 
 ## Edit and inspect
 
@@ -55,7 +66,7 @@ antioch service shell
 antioch service cp sim:/workspace/project/output.png ./output.png
 ```
 
-Exec uses files already in the session; it never copies later edits.
+`run` and `service exec` use files already in the session; they never copy later edits.
 Sync copies once. Watch applies declared `sync`, `sync+restart`, and
 `sync+exec` rules. Restart changes service processes in their existing
 containers and waits for fresh health checks. An idle service without a command

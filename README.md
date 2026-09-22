@@ -4,8 +4,8 @@ Project guidance, research, and interactive simulation tools for agents working 
 [Antioch](https://antioch.com). The plugin helps an agent work in your existing
 project, write native Isaac code, run requested evaluations on remote compute,
 and inspect their recorded evidence. It does not install a simulator locally
-or make an untested simulation correct. Interactive guidance uses immutable
-sessions: sync files, restart processes, and start a fresh session for image
+or make an untested simulation correct. Session images stay fixed: sync
+files, restart processes, and start a fresh session for image
 changes. Background work builds the same Dockerfile and runs within quotas.
 
 ## Capabilities
@@ -35,8 +35,9 @@ use the existing SDK and CLI.
 An authoring request includes a runnable local project: environment, source,
 `antioch.yaml`, and a service image with the required runtime. Built images must
 include source; an interactive image-only service can use source sync. An existing project
-is repaired in place. A plain Python script does not need a scenario decorator,
-but it still needs project configuration for remote dispatch. A question alone
+is repaired in place. Run a project Python file with `antioch run src/main.py`;
+use `antioch service exec` for arbitrary commands. A plain script needs no
+scenario decorator, but it still needs project configuration for remote dispatch. A question alone
 does not authorize files, installs, or compute.
 
 The plugin uses your existing Antioch identity. Research queries go to the
@@ -64,40 +65,25 @@ this plugin. [NOTICE](NOTICE) records provenance and licensing.
 
 ## Install and inspect setup
 
-After the selected deployment and a paired SDK support setup, use one command:
+Install the [Antioch SDK](https://console.preview.antioch.com/docs/quickstart/install-the-sdk)
+in your project's Python 3.12 virtual environment, then activate it and sign in.
+From the project directory, preview and apply plugin setup:
 
 ```bash
-antioch setup
-antioch setup --dry-run
+antioch setup --python .venv/bin/python --dry-run
+antioch setup --python .venv/bin/python
 ```
 
-Setup installs the deployed SDK and its exact paired plugin for every Claude
-Code or Codex client on PATH; a host without an agent gets only the SDK. The SDK
-supplies `antioch`, `antioch-research-mcp`, and `antioch-jupyter-mcp`. Keep them on the
-PATH inherited by the agent. An explicit existing `--python .venv/bin/python`
-targets a project environment instead of a global uv tool. Setup never edits a
-shell profile.
+On Windows, use `--python .venv\Scripts\python.exe`. Without `--python`, setup
+uses the active virtual environment, or the project's `.venv` if none is active.
+It installs the current SDK and matching plugin for every Codex or Claude Code
+client on PATH, then checks your sign-in and Research connection. If a check
+fails, follow the reported next step. Setup does not sign you in or start compute.
 
-Production is the default. `ANTIOCH_ENV=staging` selects staging, as it does
-for every antioch command. Setup verifies one
-release pair, not independent latest SDK and plugin versions. It never signs
-in. After installing, it always checks existing sign-in and a real Research
-call, and a failed check exits 1 with the exact next step.
-
-Older production metadata can require authentication, and older public SDKs
-have no plugin binding. Setup reports this rollout gap before installation.
-A fresh `uvx --from antioch-sim antioch setup` works only after a
-setup-capable SDK is normally published. Before that, the usable public
-bootstrap is SDK-only: `uv tool install --python 3.12 antioch-sim`. It is not
-proof of a verified plugin pair. Ask your staging operator for the exact
-approved private SDK bootstrap when public PyPI has no setup-capable release.
-
-Restart the agent if its harness needs that to load a plugin. Inspect native
-plugin/MCP status and approvals; an installed plugin is not proof that Research
-is reachable. Ask the agent to call `research_versions` when that check is
-within the task.
-
-Setup does not create a project or start a simulation session.
+Launch your agent from the activated environment so it can find `antioch`,
+`antioch-research-mcp`, and `antioch-jupyter-mcp`. Restart an already-running
+agent after an update. Check its plugin and MCP status, then ask it to call
+`research_versions` to confirm the Research connection.
 
 ## Use it
 
@@ -119,24 +105,15 @@ and to keep failed samples as diagnostic evidence.
 
 ## Updates and removal
 
-Run `antioch setup` again to update the SDK and plugins to the deployed
-release; `antioch setup --dry-run` shows the plan first. Use
-`antioch project update --dry-run` and then `antioch project update` in a uv
-project to update its active direct SDK dependency, lock and environment, and
-literal engine image pins; changed Dockerfile pins build through the normal
-revision path unless you pass `--no-build`. Neither command starts or alters a
-running session. Optional/group-only SDK selection needs an explicit
-interpreter. A dry run makes no installation or configuration changes; native
-clients can still write their ordinary inspection logs. Unrelated plugins and
-MCP entries are preserved.
+From the activated project environment, run `antioch setup --dry-run` to preview
+an SDK and plugin update, then `antioch setup` to apply it.
 
-Text and JSON distinguish `mode: plan` from `mode: apply`. Components report
-`current`, `planned`, or `changed`; the agent map lists every agent on PATH. A
-current plugin on a dry run is installed, not newly configured by that read.
-Project sync and build actions report `planned`, `completed`, or `skipped`
-separately: a completed uv sync need not change files or the SDK, and
-`--no-build` cannot prove a build. Read those component results, not an
-aggregate configured flag or a command trace.
+Setup changes installed packages without editing the project's dependency files
+or engine images. Use `antioch project update --dry-run`, then
+`antioch project update`, to update the dependency, lockfile, environment, and
+engine image tags together. Changed Dockerfiles are built unless you pass
+`--no-build`. Existing sessions keep their current images; start a new session
+when you are ready to use the update.
 
 To remove this plugin, use `claude plugin uninstall antioch@antioch` or
 `codex plugin remove antioch@antioch`. Remove its marketplace only if no

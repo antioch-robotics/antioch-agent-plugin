@@ -30,9 +30,10 @@ Collection expands local definitions without compute. Fix unexpected selections
 before submitting. A suite records selected inputs and a frozen revision,
 with one child scenario record per member.
 
-Interactive suites run serially in the project's session. Detached execution
-uses headless background capacity and can fan out within quotas. Follow/detach
-semantics match [scenarios](scenarios.md).
+Interactive suites run serially using the project's live session files;
+syncing files can affect active or queued members. Background execution
+uses headless background capacity and can fan out within quotas. Background and waiting
+options match [scenarios](scenarios.md).
 
 Each child's `@antioch.scenario(service="fluoro")` selects its execution
 container; reruns retain that target. The service must be active and derive
@@ -42,7 +43,7 @@ ambiguous. Live Rerun follows the active child; native Isaac/WebRTC video
 follows the selected service when it provides a stream.
 
 Interactive suites stop after a child fails, errors, or times out and cancel unstarted
-members. Detached suites continue the remaining cases, so use `--detach --follow`
+members. Background suites continue the remaining cases, so use `--background --follow`
 for a full comparison that must retain both passing and failing cases. This
 policy also applies when one scenario command selects several runs; it is not
 a separate CLI flag.

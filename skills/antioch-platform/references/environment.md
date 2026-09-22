@@ -3,11 +3,10 @@
 ## Select and inspect
 
 Read the owning `antioch.yaml`, Python dependencies/lock, Dockerfile, and
-ignore rules. Check the project's interpreter and SDK, not only the global
-CLI. Preserve deliberate pins and the selected deployment.
+ignore rules. Use the project's virtual environment for the SDK and CLI.
+Preserve deliberate dependency and engine pins.
 
-`antioch version --json` reports component versions. Production is the
-default; `ANTIOCH_ENV=staging` selects staging. MCP executables resolve on
+`antioch version --json` reports component versions. MCP executables resolve on
 the agent's launch PATH: activating a shell environment later does not switch
 an already-running adapter.
 
@@ -69,9 +68,10 @@ and requires authentication; it is not an offline validator.
 ## Images and source
 
 Init pins the installed SDK in `FROM antioch-engine/<engine>:<sdk-version>`.
-Untagged engine references are refused. Scenario capability follows verified
-image metadata, not the service name. With multiple eligible services, select
-the target with `service=` in the scenario decorator.
+Dockerfile engine references require a release tag. An untagged service `image`
+uses the submitting SDK release. Scenario capability follows verified image
+metadata, not the service name. With multiple eligible services, select the
+target with `service=` in the scenario decorator.
 
 A generated Dockerfile sets `ANTIOCH_PROJECT_DIR`, uses
 `/workspace/project`, and ends with `COPY . .`. For custom dependencies,
@@ -98,8 +98,9 @@ antioch project update --dry-run
 
 Run the non-dry operation only when installation/update is requested:
 
-- `antioch setup` installs the selected deployment's verified SDK/plugin
-  pair, globally with uv or into an existing `--python PATH` environment.
+- `antioch setup` installs the current SDK and its matching plugin. It uses
+  the active virtual environment, or the project's `.venv` if none is active.
+  Pass `--python PATH` to select another existing virtual environment.
   It configures detected Claude Code and Codex clients, not projects or shell
   profiles. Its post-install checks test existing sign-in and Research without
   logging in; read each component result even if the command fails.
@@ -108,8 +109,8 @@ Run the non-dry operation only when installation/update is requested:
   builds. It preserves engine families and extras and does not replace a live
   session. Use a new session to run the new image.
 
-Staging private artifacts need existing provider access. Do not replace a
-missing release pair or credentials with a guessed alternative.
+If setup cannot find the release or authenticate, report the error and follow
+its next step. Do not substitute a guessed package or plugin version.
 
 ## Build and revision history
 

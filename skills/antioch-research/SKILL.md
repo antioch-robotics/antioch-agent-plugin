@@ -1,6 +1,6 @@
 ---
 name: antioch-research
-version: "1.2.2"
+version: "1.2.3"
 description: Researches simulation methods, compatible tools, APIs, and behavior across Antioch's hosted documentation and source index. Use when designing, writing, porting, reviewing, or debugging work with Isaac Sim, Isaac Lab, Omniverse/Kit, OpenUSD, PhysX, Newton, Warp, cuRobo, RL libraries, Cosmos, NuRec, Isaac ROS, or Rerun, including custom kernels, solver integration, assets, and fitting simulations to measurements. Use antioch-platform for platform and CLI contracts; use primary web sources for unindexed topics.
 ---
 
@@ -60,6 +60,13 @@ use. Stop once the question is answered.
   change credentials. Respect source licenses and cite the supporting source.
 
 ## Apply the findings
+
+For Rerun, [telemetry guidance](../scenario-design/references/telemetry.md)
+owns the supported SDK/viewer pin and Antioch's recording/clock boundaries.
+Compare that pin with `research_versions` before using an API example. If the
+index is older, use the matching versioned Rerun documentation or release-tag
+source and report the coverage gap; do not treat a moving `stable` page as
+proof of compatibility with an older recording.
 
 | Next question | Guide |
 |---|---|

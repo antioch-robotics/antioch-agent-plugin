@@ -1,6 +1,6 @@
 ---
 name: scenario-design
-version: "1.4.5"
+version: "1.4.6"
 description: >-
   Guides Antioch evaluation design: scenarios, typed parameters and cases, measured checks, results, artifacts, caller recording, telemetry, and Rerun layouts. Use when authoring or reviewing scenarios and suites, defining pass/fail criteria, recording experiments, or diagnosing saved evidence and viewer output. Use antioch-platform for dispatch/history and the Isaac skills for simulator code.
 ---

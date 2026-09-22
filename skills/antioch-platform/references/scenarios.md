@@ -6,7 +6,9 @@ has a distinct run ID and record containing author, timestamps, inputs, checks,
 results, and artifact descriptors. Phase describes execution progress; outcome
 describes its verdict. Use `scenario-design` for the Python authoring contract.
 
-Managed runs pin service images and retain process output. Existing scripts
+Managed runs pin service images and retain process output. Interactive runs
+also use the session's synced files, which can change while work is running.
+Background runs use source built into their images. Existing scripts
 and notebooks can also record through the SDK without CLI dispatch; see
 [recording existing code](../../scenario-design/references/recording.md).
 Caller-owned records have no revision or managed rerun.
@@ -28,6 +30,23 @@ background dispatch and follow options. `--case` selects authored inputs;
 `--set` supplies typed overrides, and they cannot be combined. Use `--no-stream`
 beside an existing GUI producer. Follow shows progress and verdicts;
 `--verbose` adds captured process output. Check leaf help for other options.
+
+## Set time limits
+
+Use `--queue-timeout` with background work to set a deadline for Antioch to
+request execution. `--timeout` limits each scenario's execution in seconds.
+Both options also apply to suite runs.
+
+```bash
+antioch scenario run --scenario falling_cube --background --queue-timeout 30m --timeout 900
+```
+
+An explicit queue duration starts with submission preparation. Build time
+counts toward the deadline, but expiry does not interrupt a build. After
+admission, a run whose deadline passes before execution is requested is
+recorded as an error. Without this option, the deadline is 24 hours after
+admission. The execution timeout uses the scenario's configured value or
+900 seconds unless `--timeout` overrides it.
 
 ## Find and analyze
 

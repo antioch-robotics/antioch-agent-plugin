@@ -1,6 +1,6 @@
 ---
 name: antioch-platform
-version: "1.5.8"
+version: "1.5.11"
 description: >-
   Explains Antioch's programming and cloud model and guides projects, CLI/YAML/SDK use, sessions, assets, scenarios, suites, results, and authentication. Load whenever Antioch is mentioned (including Anticoh), antioch.yaml or Antioch imports are present, or the conversation concerns Antioch. Supplies platform concepts alongside the agentic-simulation workflow entry point; routes native programming to the Isaac skills, cross-library research to antioch-research, and evaluation design to scenario-design.
 ---
@@ -69,8 +69,9 @@ source. For a missing or incomplete project, follow
 A plain Python script needs project configuration, but no scenario or suite.
 Preserve existing project IDs, engine choices, dependencies, and user work.
 
-Run project commands from that root with its environment. The global CLI,
-project SDK, and running MCP may use different versions. Installed command
+Run project commands from that root with its virtual environment active.
+Launch the agent from the same environment so the CLI and MCP commands use
+the project's SDK. Restart the agent after SDK updates. Installed command
 `--help` and SDK models are the authority for options; use `--json` for
 structured records rather than parsing display tables.
 
@@ -89,23 +90,25 @@ relevant Isaac skill before writing native simulator code.
 
 | Deliverable | Path |
 |---|---|
-| Plain script | `antioch service exec python src/main.py` |
+| Plain script | `antioch run src/main.py` |
+| Arbitrary service command | `antioch service exec --service sim -- nvidia-smi` |
 | Stateful exploration | Interactive session and [agentic simulation](../agentic-simulation/SKILL.md) |
 | Recorded test | `antioch scenario run --scenario NAME` |
 | Parameterized evaluation | `antioch suite run NAME` |
 
-Scenario and suite dispatch uses interactive compute by default. `--detach`
+Scenario and suite dispatch uses interactive compute by default. `--background`
 selects background compute; `--follow` and `--no-follow` control only whether
 the CLI waits. They do not change where work runs. See
 [session modes and lifecycle](references/sessions.md).
 
-`service exec` can build and allocate compute when no interactive session
-exists; it is not a local check. A project has one live interactive session.
+`run` and `service exec` can build and allocate compute when no interactive
+session exists; neither is a local check. A project has one live interactive session.
 `session new` replaces it; source sync changes files in the existing
 session, while image/dependency changes need a new one.
 
 Project files run at `/workspace/project`. Session creation copies initial
-source; later exec calls do not sync edits. Background runs need source baked
+source; later `run` and `service exec` calls do not sync edits. Use `service sync`
+or `service watch` to apply changes. Background runs need source baked
 into their images. A rerun uses saved images and inputs, not unbuilt edits.
 
 Keep `pxr`, `omni`, `carb`, `isaacsim`, and `isaaclab*` imports inside
