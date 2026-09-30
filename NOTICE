@@ -23,3 +23,24 @@ lazy simulator imports, and API corrections are checked against that runtime.
 Domain examples and topic structure are retained. Project-specific incident
 history and upstream agent-orchestration instructions are excluded. Each
 reference links its original source; linked upstream scripts are not bundled.
+
+The ROS 2 skill in skills/ros2/ adapts Apache-2.0 material from:
+
+  - The Isaac Sim skills library at
+    https://github.com/isaac-sim/IsaacSim/tree/2469084bc328710207c6bc4ede32209082a9286c/skills
+    (skill: isaac-sim-ros2-bridge), Copyright NVIDIA Corporation.
+  - The Isaac Sim ROS workspaces at
+    https://github.com/isaac-sim/IsaacSim-ros_workspaces/tree/a9e8471ee901bc2332c1e4aca94ac580713ca3ab
+    (jazzy_ws isaac_moveit and carter_navigation), Copyright NVIDIA Corporation.
+  - ros2-engineering-skills at
+    https://github.com/dbwls99706/ros2-engineering-skills/tree/61870e4b94098d4d4f4b1f640936f9a3f7721304
+    (references: tf2-urdf, simulation, communication, nodes-executors,
+    launch-system, navigation, manipulation, hardware-interface),
+    Copyright 2025 dbwls99706.
+
+Adaptations target the ROS 2 Jazzy that Isaac Sim 6.0.1 bundles and the ROS
+service images that connect to it: local
+installation, hardware bring-up, and upstream agent-process instructions are
+replaced by Antioch's engine and service model, and Isaac node names and
+inputs are corrected against the Isaac Sim v6.0.1 source. Each reference
+links its original sources; upstream scripts are not bundled.

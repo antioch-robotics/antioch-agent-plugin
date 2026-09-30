@@ -2,15 +2,9 @@
 
 Adapted from NVIDIA [`manipulation-ik/SKILL.md`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/manipulation-ik/SKILL.md) (Apache-2.0).
 
-Read [Isaac Sim on Antioch](../SKILL.md) for startup, imports, and runtime configuration.
-Native snippets run after startup, inside project functions or an active kernel.
-Linked upstream scripts are source examples, not installed plugin commands.
+[Isaac Sim task index](../SKILL.md#domain-references) · [Antioch startup](../../antioch-platform/references/simulation-code.md)
 
-## Purpose
-
-Control manipulator arms with differential IK, schema-native poser workflows, grasp frames, fixed-joint grasping, and hybrid IK plus joint-space motion.
-
-Patterns reference Isaac Sim docs and upstream example files; embedded code is a pattern sketch, not the canonical source. Always read the linked example; the pinned upstream snapshot is provenance, not proof every API ships at the Isaac Sim 6.0.1 / Kit 110.1.2 runtime pin — confirm symbols with the research index before relying on them.
+Embedded code is a pattern sketch; the linked upstream example is the source, and the pinned snapshot does not prove every API ships at Isaac Sim 6.0.1, so confirm symbols with the research index.
 
 ## Upstream source examples
 
@@ -19,19 +13,12 @@ Patterns reference Isaac Sim docs and upstream example files; embedded code is a
 | [`scripts/differential_ik_sketch.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/manipulation-ik/scripts/differential_ik_sketch.py) | Conceptual sketch for custom Jacobian-based differential IK | see script --help |
 | [`scripts/robot_poser_example.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/manipulation-ik/scripts/robot_poser_example.py) | Schema-native IK + named-pose workflow using isaacsim.robot.poser | see script --help |
 
-## When to use
-
-- Control an articulated arm to reach, grasp, transport, place.
-- Set up IK-based end-effector control (vs joint-space).
-- Store reusable robot poses as named poses and apply them later.
-- Set up grasping (FixedJoint, `SurfaceGripper`, contact-based).
-- Validate manipulation success with a feedback loop.
-
 ## Pick the right IK stack
 
 | Stack | Module | When |
 |---|---|---|
-| Differential IK on `Articulation` | `isaacsim.core.experimental.prims.Articulation` + custom Jacobian solver | specialized direct end-effector control; no maintained example wrapper |
+| Franka pick and place | `isaacsim.robot.experimental.manipulators.examples.franka` (`Franka`, `FrankaPickPlace`) | a working Franka controller to start from; enable the extension through `SimulationConfig.extensions` |
+| Differential IK on `Articulation` | `isaacsim.core.experimental.prims.Articulation` + custom Jacobian solver | specialized direct end-effector control |
 | Schema-native IK + named poses | `isaacsim.robot.poser.RobotPoser` (LM solver via `isaacsim.robot.poser.IKSolverRegistry`) | offline pose authoring, persisted "pick_position" / "approach" poses |
 | Obstacle-aware reactive | `isaacsim.robot_motion.cumotion.RmpFlowController` via [motion-generation](motion-generation.md) | dynamic obstacle avoidance, reactive trajectories |
 | Pinocchio / PINK | `isaacsim.robot_motion.pink.PinkIKController` | alternative full IK stack with joint limits / task hierarchies |
@@ -90,9 +77,9 @@ Tuning (start conservative, increase after stability):
 |---|---|---|---|
 | `damping` | 0.1 | 0.05 | 0.01 |
 | `max_delta` per step | 0.02 rad | 0.05 rad | 0.10 rad |
-| Drive `stiffness` | 200 | 400 | 800 |
+| Drive `stiffness` (upstream values; units unspecified) | 200 | 400 | 800 |
 
-Aggressive settings cause PhysX divergence under payload.
+The upstream stiffness table does not identify the setter or its units, so it is not a transferable gain recipe. Direct USD angular force-drive stiffness uses N m/degree; the URDF importer accepts N m/rad and converts it. Choose the API and units before tuning, then check stability under the intended payload. Aggressive settings can diverge.
 
 ### Hybrid IK + joint-space (arms with < 6 DOF)
 
@@ -162,9 +149,11 @@ from isaacsim.robot.surface_gripper import _surface_gripper as surface_gripper
 
 iface = surface_gripper.acquire_surface_gripper_interface()
 gripper_path = f"{end_effector_path}/SurfaceGripper"
-iface.close_gripper(gripper_path)  # attach
-iface.open_gripper(gripper_path)  # release
-status = iface.get_gripper_status(gripper_path)  # GripperStatus.{Open,Closed}
+iface.close_gripper(gripper_path)  # request a grasp
+status = iface.get_gripper_status(gripper_path)  # Open, Closing, or Closed
+# Step the owning framework and poll until Closed, with a bounded deadline.
+# Validate the held object before continuing the manipulation.
+# Call iface.open_gripper(gripper_path) when ready to release.
 ```
 
 Authored on the robot via `usd.schema.isaac.robot_schema.CreateSurfaceGripper`.
@@ -198,16 +187,11 @@ After executing, validate **object state** (not just tool pose) at three gates, 
 
 ## Rules
 
-1. Read the local example first; this skill describes patterns, not syntax.
-2. Always create or identify a grasp frame (`IsaacSiteAPI`) before IK.
-3. Start conservative with IK gains; increase only after confirming stability.
-4. The URDF importer applies `PhysxArticulationAPI` automatically; if you author articulations manually, apply it on the base link.
-5. Run scripts in the Antioch simulator service; a plain script calls `antioch.start_simulation()` before simulator imports, and a managed scenario declares `SimulationConfig` instead of constructing `SimulationApp`.
-6. Jacobian layout depends on base type: only a floating base has six leading base columns; fixed-base rows omit the root link.
-7. Store reusable poses with `store_named_pose`; do not re-solve IK from scratch every session.
-8. `print()` is unreliable in headless mode; use file writes for debug logging.
-9. Validate visually at every phase. Smooth motion is not successful manipulation.
-10. Hybrid IK + joint-space is the pragmatic default for arms with < 6 DOF.
+1. Create or identify a grasp frame (`IsaacSiteAPI`) before IK.
+2. `UsdPhysics.ArticulationRootAPI` defines the articulation; `PhysxArticulationAPI` adds PhysX solver settings. For a manually assembled robot, identify its root link and joint tree before applying the root schema; see the [articulation checks](usd-articulation.md#validation-checklist). Do not add a second root to an imported articulation.
+3. Jacobian layout depends on base type: only a floating base has six leading base columns; fixed-base rows omit the root link.
+4. Store reusable poses with `store_named_pose` instead of re-solving IK every session.
+5. Smooth motion is not successful manipulation; validate object state at each gate.
 
 ## Lessons
 

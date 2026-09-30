@@ -2,13 +2,7 @@
 
 Adapted from NVIDIA [`data-collection-sim/SKILL.md`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/data-collection-sim/SKILL.md) (Apache-2.0).
 
-Read [Isaac Sim on Antioch](../SKILL.md) for startup, imports, and runtime configuration.
-Native snippets run after startup, inside project functions or an active kernel.
-Linked upstream scripts are source examples, not installed plugin commands.
-
-## Purpose
-
-Produce annotated static-scene synthetic data with Replicator writers (RGB, depth, segmentation, pose, Kitti/COCO variants) in headless batch runs.
+[Isaac Sim task index](../SKILL.md#domain-references) · [Antioch startup](../../antioch-platform/references/simulation-code.md)
 
 Build headless SDG pipelines using Isaac Sim 6.0 Replicator. Outputs annotated frames (RGB, depth, segmentation, bbox, pose) to disk via writers.
 
@@ -30,7 +24,7 @@ Build headless SDG pipelines using Isaac Sim 6.0 Replicator. Outputs annotated f
 ## Architecture
 
 ```
-Config (YAML/JSON) → SimulationApp (headless) → Scene Setup → Randomizers → Capture Loop → Writer → Disk
+Config (YAML/JSON) → Antioch simulation startup → Scene Setup → Randomizers → Capture Loop → Writer → Disk
 ```
 
 ## Required Imports
@@ -38,18 +32,25 @@ Config (YAML/JSON) → SimulationApp (headless) → Scene Setup → Randomizers 
 ```python
 import antioch
 
-antioch.start_simulation()  # before simulator imports; a managed scenario
-# declares SimulationConfig on the decorator instead. Renderer preset and
-# headless mode are startup settings (SimulationConfig fields / extra_args),
-# not per-script SimulationApp construction.
 
-import carb.settings
-import omni.replicator.core as rep
-import omni.usd
-import isaacsim.core.experimental.utils.stage as stage_utils
-from isaacsim.core.experimental.utils.semantics import add_labels, remove_all_labels
-from isaacsim.storage.native import get_assets_root_path
+def main():
+    antioch.start_simulation()
+
+    import carb.settings
+    import omni.replicator.core as rep
+    import omni.usd
+    import isaacsim.core.experimental.utils.stage as stage_utils
+    from isaacsim.core.experimental.utils.semantics import add_labels, remove_all_labels
+    from isaacsim.storage.native import get_assets_root_path
+
+    # Continue with scene setup, randomizers, capture, and writer cleanup here.
+
+
+if __name__ == "__main__":
+    main()
 ```
+
+Keep native imports inside the function that runs after startup. A managed scenario declares `SimulationConfig` on its decorator and imports native modules inside the scenario body; it does not call `start_simulation()` again. The remaining snippets belong inside that initialized function.
 
 `stage_utils.open_stage()` / `stage_utils.add_reference_to_stage()` / `stage_utils.define_prim()` / `stage_utils.get_current_stage()` are the Kit 110 replacements for the legacy `isaacsim.core.utils.stage.*` and `isaacsim.core.utils.prims.create_prim` flow. Keep `omni.replicator.core` for SDG primitives.
 
@@ -148,11 +149,15 @@ rep.utils.send_og_event(event_name="randomize_lights")
 
 SDG runs headless in the Antioch simulator service; there is no local launcher. A plain script calls `antioch.start_simulation()` before simulator imports and takes `--config` / `--num-frames` / `--output-dir` style CLI args as usual; a managed scenario declares `SimulationConfig` on the decorator and does not start a second app.
 
+A capture loop that works in a Jupyter kernel can behave differently in a plain script. In a measured run, synchronous `rep.orchestrator.step` took about 30 s per frame in a script; driving the async loop with `run_coroutine(generate_async(...))` on the `SimulationApp` that `antioch.application()` returns restored kernel speed. Reading annotators with `get_data()` after each step then segfaulted intermittently, and consuming frames in a registered `Writer` fixed it: 100 frames ran clean in 54 s. In a managed scenario run, a loop that worked in a warm kernel got a one-dimensional empty array from its first `get_data()`; check that an annotator returned the render product's full shape before using the frame.
+
+For an orchestrator that paces on the default viewport, use `SimulationConfig(viewport_updates=True)` when running without a livestream. The default follows livestream state, so an unstreamed process otherwise pauses that viewport. Keep driving Kit; this setting does not advance it by itself. Sensor render products remain separate. See [rendering](isaac-sim-rendering.md).
+
 Headlessness and the renderer preset are startup settings (`SimulationConfig` fields), not a launcher flag. See [antioch-platform](../../antioch-platform/SKILL.md) for dispatch.
 
 ## Configuration Pattern
 
-Use YAML config to parameterize everything:
+For a reusable capture job, put changing inputs in configuration:
 
 ```yaml
 resolution: [1280, 720]
@@ -180,17 +185,18 @@ objects:
 ## Validation Checklist
 
 1. Output directory contains expected number of frames
-2. RGB images are non-black (mean RGB > 30)
+2. Decode images and check the intended appearance; darkness alone is not a failure
 3. Annotation files match frame count
 4. Semantic labels appear in segmentation maps
-5. Bounding boxes have non-zero area
+5. Bounding boxes match visible labeled objects
 6. No NaN in depth maps
 
 ## Key Rules
 
 - Set `rep.orchestrator.set_capture_on_play(False)` for manual step control.
 - `rt_subframes`: render the same frame multiple times to reduce ghosting from large pose deltas and to let materials/textures converge. Tune for your renderer: small (4-8) is often enough for RTX Real-Time + DLSS Quality; 16-32 is typical for path tracing or scenes with heavy material streaming.
-- DLSS Quality: `carb.settings.get_settings().set("rtx/post/dlss/execMode", 2)`. Recommended for SDG; default Performance mode can produce edge artifacts below ~600x600.
+- DLSS Quality: `SimulationConfig(renderer_quality="quality")` at startup, or `carb.settings.get_settings().set("rtx/post/dlss/execMode", 2)`. Recommended for SDG. Antioch's default `balanced` preset rendered a 640x480 camera at 371x278 internally, below DLSS's 300-pixel minimum input, and lower modes produce edge artifacts below ~600x600.
+- RTX real-time accumulates across frames. After a lighting change, mean brightness kept moving for three to five `step_async(rt_subframes=16)` captures in one measurement, so step until frames settle before recording one.
 - Tag every prim you want annotated via `add_labels(...)` (taxonomy-aware) or `rep.functional.modify.semantics(...)`. Both write the `UsdSemantics.LabelsAPI` schema.
 - For static-scene SDG, pass `delta_time=0.0` to `rep.orchestrator.step` so the timeline does not advance between captures.
 - Call `rep.orchestrator.wait_until_complete()` before cleanup so the background backend has flushed everything to disk.

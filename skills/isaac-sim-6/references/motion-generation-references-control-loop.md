@@ -2,9 +2,7 @@
 
 Adapted from NVIDIA [`motion-generation/references/control-loop.md`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/references/control-loop.md) (Apache-2.0).
 
-Read [Isaac Sim on Antioch](../SKILL.md) for startup, imports, and runtime configuration.
-Native snippets run after startup, inside project functions or an active kernel.
-Linked upstream scripts are source examples, not installed plugin commands.
+[Isaac Sim task index](../SKILL.md#domain-references) · [Antioch startup](../../antioch-platform/references/simulation-code.md)
 
 Generic motion-generation control contract: build an estimated `RobotState` and a
 setpoint `RobotState`, call `reset(...)` then `forward(...)` each frame, and apply the

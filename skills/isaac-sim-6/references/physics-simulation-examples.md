@@ -1,30 +1,22 @@
-# Examples
+# Mechanism experiments
 
 Adapted from NVIDIA [`physics-simulation/examples.md`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/physics-simulation/examples.md) (Apache-2.0).
 
-Read [Isaac Sim on Antioch](../SKILL.md) for startup, imports, and runtime configuration.
-Native snippets run after startup, inside project functions or an active kernel.
-Linked upstream scripts are source examples, not installed plugin commands.
+[Isaac Sim task index](../SKILL.md#domain-references) · [Antioch startup](../../antioch-platform/references/simulation-code.md)
 
 ## Worked Examples
 
-Five validated mechanism templates, each chosen for a *non-obvious* technique that
-isn't in Parts 1–8. If the only thing an example would teach you is "use CCD" or
-"set stabilization=False", it's been merged into the parts above instead.
+These five upstream mechanisms show different experiment structures. Their dimensions and solver settings are starting points, not acceptance criteria or guarantees. Start with [physics configuration](physics-simulation.md), use one stepping owner, and record enough live state to explain the result. Native code fragments run after [Antioch startup](../../antioch-platform/references/simulation-code.md).
 
 ### 1. Impact / Crash (Vehicle vs Bollard)
 
-**Non-obvious value:** the spring-return-vs-rigid-bollard architecture choice and
-the impact-energy math.
+Compare a rigid mount with a compliant mount, then measure where the impact energy goes.
 
-**Setup (example):** 120 Hz physics + 2–4 substeps + CCD; TGS 32/8.
+**Starting experiment:** use CCD when tunneling is a risk, then compare timestep and solver-iteration settings until the measured result converges. The upstream template starts at 120 Hz with TGS 32/8; verify the actual stepping configuration rather than assuming extra render updates create substeps.
 
 **Two architectures:**
-1. **Fixed bollard** — rigid `CollisionAPI` mount. Full force transmission, ~65 kN
-   peak for a 2000 kg / 8 km/h hit (example numbers from the upstream template).
-2. **Spring-return bollard** — `CollisionAPI` mount on a prismatic joint with a
-   stiff PD drive and damping. ~95% energy absorbed, <0.5 m vehicle rebound, peak
-   force reduced > 90% in that template.
+1. **Fixed bollard:** a static mount transfers the impact through contact.
+2. **Spring-return bollard:** a prismatic joint with a spring and damper allows displacement and dissipates energy. Measure travel, rebound, and impulse; the drive gains and limits determine the response.
 
 **Velocity injection:** set linear velocity via experimental `RigidPrim.set_velocities(linear_velocities=...)`
 **after** play/reset through the stepping owner. The USD `physics:velocity` attribute is authored, not
@@ -33,98 +25,59 @@ runtime — this is documented in Part 8 of [physics-simulation.md](physics-simu
 **Analysis:**
 ```
 Impact energy:  E = 0.5 * m * v²        # 2000 kg @ 8 km/h = 4938 J
-Peak force:     F = Δp / Δt
+Average force:  F_avg = Δp / Δt  # over the sampled interval, not peak force
 Restitution:    e = v_rebound / v_impact
 ```
 
-**Standards (when you need real numbers):** ASTM F2656, PAS 68, IWA 14-1.
+Use contact samples to measure peak force at their actual sample interval. The upstream experiment reported about 65 kN peak for the rigid mount, and about 95% energy absorption, less than 0.5 m vehicle rebound, and over 90% lower peak force for its spring mount. These are source-specific observations, not validated Antioch results or predictions for another bollard.
+
+The source names ASTM F2656, PAS 68, and IWA 14-1 as barrier-test references. Check the applicable standard and its current requirements separately; simulation output alone does not establish a certified rating.
 
 ### 2. Vibratory Bowl Feeder (kinematic high-frequency animation)
 
-**Non-obvious value:** the per-physics-step kinematic update pattern with
-phase-offset radial-leads-vertical motion that produces net upward part transport.
+Drive the bowl at physics-step cadence so the renderer does not change its excitation. Compare phase, amplitude, and frequency against measured part transport.
 
-**Vibration parameters (typical M8-bolt feeder, starting points):**
-- Frequency 60 Hz, vertical amplitude 0.3 mm, radial amplitude 0.1 mm
-- Phase offset: radial **leads** vertical by π/4 (this asymmetry is what climbs parts)
+The upstream sketch simplifies bowl motion to translation along X and Z. It does not model torsional bowl motion along a helical track; use that geometry and motion explicitly when they matter to the feeder.
 
-**Physics Hz: 480** (8× vibration frequency; see Hz table in [physics-simulation.md](physics-simulation.md)). CCD on, per-part
-iters 16/4, `EnableStabilization=False` on the bowl.
+**Upstream translation parameters (starting points):**
+- Frequency 60 Hz, vertical amplitude 0.3 mm, X amplitude 0.1 mm
+- Phase offset: horizontal motion leads vertical by π/4 in this starting experiment; geometry, friction, and contact determine whether parts climb
+
+The upstream example uses 480 Hz, eight samples per 60 Hz cycle, with CCD enabled, 16/4 solver iterations per part, and stabilization disabled. Keep these as the source's experiment settings. Test finer timesteps for convergence; inspect contact and damping before adjusting solver settings.
 
 ```python
 import math
 
 
-def update_bowl_vibration(bowl_prim, frame, hz=60.0, amp_z=0.0003, amp_r=0.0001, physics_hz=480):
-    t = frame / physics_hz
+def bowl_offset(sim_s, hz=60.0, amp_z=0.0003, amp_x=0.0001):
+    """Translation offset for a driven bowl, in meters."""
     omega = 2 * math.pi * hz
-    dz = amp_z * math.sin(omega * t)
-    dr = amp_r * math.sin(omega * t + math.pi / 4)  # radial leads by π/4
-    xf = UsdGeom.Xformable(bowl_prim)
-    xf.ClearXformOpOrder()
-    xf.AddTranslateOp().Set(Gf.Vec3d(dr, 0, dz))
+    return (amp_x * math.sin(omega * sim_s + math.pi / 4), 0.0, amp_z * math.sin(omega * sim_s))
 ```
 
-Call this **every physics step**, not every render frame — the oscillation aliases otherwise.
-`ClearXformOpOrder` discards authored scale/orientation; only use it when the kinematic bowl is a dedicated prim whose transform you fully own. This is a kinematic drive, not a proof of part-climbing contact — measure part poses and contacts.
+Apply the offset relative to the bowl's initial pose through the selected backend's kinematic-body API on each physics step. Preserve its orientation and scale. Confirm how that API derives surface velocity from kinematic targets, since contact transport depends on it. Measure part displacement and contacts; the bowl moving as requested is not evidence that it carries parts correctly.
 
-### 3. Spinning Top — Gyroscopic Stability Formula
+### 3. Spinning top
 
-**Non-obvious value:** the gyroscopic stability ratio that tells you in advance
-whether your top will precess cleanly or just fall over.
+A spinning top tests inertia, damping, gravity, contact, and numerical stability together. Start with the authored mass, inertia tensor, and center of mass. A thin disk has axial inertia `Izz = 0.5 * m * r**2`; a solid cone has `Izz = 0.3 * m * r**2` about its symmetry axis.
 
-**Stability condition** — must be > 1, ideally > 2:
-```
-ratio = (Izz * ω_spin) / (m * g * d_com * sin(tilt))
-```
+For fast, approximately steady precession, `precession_rate ≈ m * g * d / (Izz * spin_rate)`, where `d` is the pivot-to-center-of-mass distance. This approximation does not decide whether every initial condition is stable. The upstream ratio `Izz * spin_rate / (m * g * d * sin(tilt))` has units of time, so it is not a dimensionless stability threshold.
 
-| Body | I_zz | Stability ratio |
-|---|---|---|
-| Cone | 3/10 m r² | ~0.6 → topples |
-| Disk flywheel | ½ m r² | high → precesses |
+For an ideal symmetric top upright on a fixed pivot, the small-tilt stability condition is `Izz**2 * spin_rate**2 > 4 * I_perp * m * g * d`, where `I_perp` is the transverse inertia about the pivot. The ratio of the two sides is dimensionless. This is the [sleeping-top result](https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/9579/sicm_edition_2.zip/chapter003.html), not a guarantee for a sliding tip, large tilt, or dissipative contact.
 
-**Reference design that works** (ratio = 2.01 at 100 rad/s, 10° tilt, precession ≈ 0.5 rad/s):
-- Flywheel: Ø120 mm × 25 mm brass disk, ~0.4 kg
-- Stem: Ø8 mm × 40 mm steel
-- Tip: Ø6 mm polished steel sphere
-- I_zz = 7.2e-4 kg·m², CoM 52.5 mm above tip
+Measure orientation, spin, angular momentum, and contact through time. Compare timesteps and solver settings. Simplify compound colliders when diagnosing tunneling, but retain the geometry needed for the task. The upstream top reportedly tunneled at about 50 rad/s after 5–6 s; that observation is specific to its compound colliders and setup. A speed threshold observed on one top is not a general backend limit.
 
-**Tunneling failure mode** (logged here so it doesn't surprise you): compound
-colliders tunnel through surfaces above ~50 rad/s after 5–6 s. For longer runs use
-simpler convex hulls or raise physics Hz beyond 480.
+### 4. Newton's cradle and contact chains
 
-### 4. Newton's Cradle — PhysX Same-Island Contact Limitation
+Use a pendulum chain to examine sequential impulse transfer. Record each body's trajectory, contact times, impulse, and energy rather than judging only the final render. Start with known masses, joint lengths, contact geometry, and initial displacement.
 
-**Non-obvious value:** this is a permanent bug-report on PhysX. **Don't waste time
-trying to brute-force it.**
+The upstream example reported all spheres moving together under several PhysX configurations. It tried TGS and PGS at 64/32 solver iterations, 120/240/480 Hz, 0.1–0.2 mm initial gaps, restitution 1.0 with `restitutionCombineMode=max`, and CCD. Those are the source's reported experiments, not proof that every same-island contact chain is impossible. Test initial gaps, timestep, restitution, collision approximation, and solver settings in a small case, and retain the run evidence.
 
-**Symptom:** the classic Newton's cradle (one ball hits, one ball flies off the
-opposite end) cannot be reproduced with stock PhysX. TGS and PGS both resolve all
-contacts in a single island simultaneously, so momentum gets distributed equally
-across all 5 spheres. Result: all 5 oscillate in unison at ~5° instead of sequential
-transfer.
-
-**Confirmed not-fixable by tuning:**
-- TGS or PGS, 64/32 iterations
-- 120 / 240 / 480 Hz
-- Tiny gaps between spheres (0.1–0.2 mm)
-- Restitution 1.0 with `restitutionCombineMode=max`
-- CCD on
-
-**Do not convert the cradle into baked animation and call it physics.** Keep the
-pendulum-chain physics real (revolute joints, gravity, contact reporting). If you
-script analytical momentum transfer between the end spheres on a detected impact,
-label that transfer as non-physical. Contact evidence is a contact sensor or
-impulse report, not geometric proximity of the spheres.
-
-**Implication for other scenes:** any same-island contact chain where you need
-**sequential** momentum propagation has this limitation. Plan accordingly.
+Do not replace the chain with baked animation and call it physics. If the requested model uses analytical impulse transfer, label that part as scripted. Contact evidence comes from the contact or impulse API, not only proximity.
 
 ### 5. Escapement Clock — Hybrid Physics + Scripted Mechanism
 
-**Non-obvious value:** the architecture template for any sub-10 mm mechanical
-contact (escapements, ratchets, latches, watch movements). Pure PhysX collision is
-unreliable below ~10 mm; this hybrid is the proven approach.
+An escapement can be modeled through contact or through a hybrid controller, depending on the task. The hybrid below makes the pendulum dynamic and the mechanism state-driven. Choose it when that abstraction is acceptable; there is no universal 10 mm cutoff for physical contact simulation.
 
 **Architecture:**
 
@@ -145,22 +98,17 @@ LOCKED_LEFT → RELEASING_RIGHT → LOCKED_RIGHT → RELEASING_LEFT → LOCKED_L
 
 One full tick = two half-ticks = one tooth.
 
-**Physics on the pendulum** (critical for accurate period):
+**Pendulum configuration to inspect:**
 - `enableStabilization=False`, `angularDamping=0.0`, `jointFriction=0.0`
-- `diagonalInertia = m_bob·L² + m_rod·L²/3`
-- 32/16 iterations
-- **No collision on the bob** — frame clipping at high amplitude breaks the joint
+- Author body inertia about its center of mass. `m_bob * L**2 + m_rod * L**2 / 3` approximates inertia about the pivot for a point bob and uniform rod; it is not the USD diagonal inertia to assign to the body.
+- Solver iterations and timestep, checked for convergence
+- Collision filtering that matches the model; fix unintended frame intersections rather than hiding required collisions
 
-**Initialization:** set initial tilt via `AddRotateYOp(7°)`, **not** via a pre-play
-angular-velocity write. After play/reset, experimental `RigidPrim.set_velocities`
-can apply a small impulse kick (~0.015 rad/s in the upstream template) at each
-tick to compensate numerical damping — PhysX revolute joints lost ~40% energy over
-15 s in that example even with all mitigations. Dynamic Control is not a current
-recommended surface.
+**Initialization:** set the pendulum's initial pose or joint state through its owning API, then reset and step. Measure its free-decay behavior before adding a sustaining drive. If a tick applies an impulse to replace lost energy, log that input and describe the model as driven. Do not hide impulses to make passive behavior look correct.
 
-**Reusability:** any mechanism where one body's *contact* drives another body's
-discrete *state advance* fits this template. Replace the pendulum + escape wheel
-with whatever pair you need.
+The upstream demonstration used 32/16 solver iterations, a 7° initial tilt, no collision on the bob, and angular-velocity increments of about 0.015 rad/s at each tick. It reported about 40% energy loss over 15 s before compensation. These observations describe that setup; they do not establish a universal damping rate. Disabling bob collision is only appropriate when bob contact is outside the intended model.
+
+**Reusability:** this controller advances the wheel when the pendulum crosses angle thresholds. Another mechanism can use a measured pose, joint angle, or contact event as its trigger; state which signal drives each transition.
 
 ---
 
@@ -168,7 +116,9 @@ with whatever pair you need.
 
 - Robot USD / drives: [urdf-mjcf-to-usd-conversion.md](urdf-mjcf-to-usd-conversion.md)
 - Multi-link assembly: [usd-articulation.md](usd-articulation.md)
-- SDG scenes: [data-collection-sim.md](data-collection-sim.md) / [sdg.md](data-collection-sim.md)
+- SDG scenes: [data collection](data-collection-sim.md)
 - Grasping physics: [manipulation-ik.md](manipulation-ik.md)
 - Hang/freeze: [isaac-sim-troubleshooting.md](isaac-sim-troubleshooting.md)
 - Scene/backend contract: [physics-simulation.md](physics-simulation.md)
+
+Use [scenario design](../../scenario-design/SKILL.md) to turn each experiment into parameterized inputs, measured checks, and saved telemetry.

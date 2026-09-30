@@ -2,32 +2,19 @@
 
 Adapted from NVIDIA [`isaac-sim-robot-navigation/SKILL.md`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/isaac-sim-robot-navigation/SKILL.md) (Apache-2.0).
 
-Read [Isaac Sim on Antioch](../SKILL.md) for startup, imports, and runtime configuration.
-Native snippets run after startup, inside project functions or an active kernel.
-Linked upstream scripts are source examples, not installed plugin commands.
-
-## Purpose
-
-Drive mobile robots at runtime with RL policies, trajectory followers, and physics/baked/per-frame stage strategies.
+[Isaac Sim task index](../SKILL.md#domain-references) · [Antioch startup](../../antioch-platform/references/simulation-code.md)
 
 A rendered trajectory is not physical navigation evidence. Keep actuators, contacts, slip, balance, and obstacles active for a physical claim. Label kinematic replay and USD timeSamples as replay.
 
 Dispatch and session setup belong to [antioch-platform](../../antioch-platform/SKILL.md). Verdicts and telemetry belong to [scenario-design](../../scenario-design/SKILL.md).
-
-## Read these first
-
-- [navigation-primitives.md](navigation-primitives.md) — occupancy maps, A* planning, differential/holonomic kinematics, robot footprints, look-at chase-camera math.
-- [occupancy-map.md](occupancy-map.md) — ROS `map.yaml` / `map.png` generation.
-- [rendering.md](isaac-sim-rendering.md) / [isaac-sim-rendering.md](isaac-sim-rendering.md) — capture and frame diagnosis.
-- [isaac-sim-troubleshooting.md](isaac-sim-troubleshooting.md) — hang/freeze isolation.
 
 ## When to use this vs siblings
 
 | Goal | Use |
 |---|---|
 | Drive a robot through a scene in real time | this reference |
-| Record trajectories then re-render with sensors for SDG | [mobility-gen.md](mobility-gen.md) / [sdg.md](data-collection-sim.md) |
-| Publish/subscribe Nav2 topics to ROS 2 | [antioch-platform](../../antioch-platform/SKILL.md); enable `isaacsim.ros2.bridge` through `SimulationConfig.extensions` |
+| Record trajectories then re-render with sensors for SDG | [mobility-gen.md](mobility-gen.md) / [data collection](data-collection-sim.md) |
+| Publish/subscribe Nav2 topics to ROS 2 | [ros2](../../ros2/SKILL.md) and its [Nav2 guide](../../ros2/references/nav2.md); enable `isaacsim.ros2.bridge` through `SimulationConfig.extensions` |
 
 ## Runtime APIs
 
@@ -70,7 +57,7 @@ all non-robot collision changes the experiment and cannot prove navigation.
 
 ## Viewport capture vs sensor cameras
 
-Chase/overhead/POV look-at math lives in [navigation-primitives.md](navigation-primitives.md). Those helpers aim a viewport or authored `UsdGeom.Camera`; they do not replace `isaacsim.sensors.experimental.rtx` cameras or Replicator products. See [sensors.md](isaac-sim-sensor.md) and [isaac-camera.md](isaac-camera.md).
+Chase/overhead/POV look-at math lives in [navigation-primitives.md](navigation-primitives.md). Those helpers aim a viewport or authored `UsdGeom.Camera`; they do not replace `isaacsim.sensors.experimental.rtx` cameras or Replicator products. See [sensors](isaac-sim-sensor.md) and [isaac-camera.md](isaac-camera.md).
 
 `omni.kit.viewport.utility.capture_viewport_to_file()` returns a `MultiAOVFileCapture`. Use `.wait_for_result(...)` rather than `.wait()`. A completion-frame count is a timeout, not proof of scene or renderer readiness; inspect the decoded frame.
 
@@ -89,4 +76,4 @@ Chase/overhead/POV look-at math lives in [navigation-primitives.md](navigation-p
 - Receives occupancy, A\*, kinematics, and camera math from [navigation-primitives.md](navigation-primitives.md).
 - Receives `map.yaml` / runtime grids from [occupancy-map.md](occupancy-map.md).
 - Receives robot USD from [urdf-mjcf-to-usd-conversion.md](urdf-mjcf-to-usd-conversion.md) / [usd-articulation.md](usd-articulation.md).
-- Capture of nav runs: [rendering.md](isaac-sim-rendering.md).
+- Capture of nav runs: [rendering](isaac-sim-rendering.md).

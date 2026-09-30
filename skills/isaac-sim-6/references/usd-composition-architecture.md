@@ -2,17 +2,11 @@
 
 Adapted from NVIDIA [`usd-composition-architecture/SKILL.md`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/usd-composition-architecture/SKILL.md) (Apache-2.0).
 
-Read [Isaac Sim on Antioch](../SKILL.md) for startup, imports, and runtime configuration.
-Native snippets run after startup, inside project functions or an active kernel.
-Linked upstream scripts are source examples, not installed plugin commands.
-
-## Purpose
-
-Author sim-ready USD with layered payloads (base, instances, materials, physics, robot) following NVIDIA composition conventions.
+[Isaac Sim task index](../SKILL.md#domain-references) · [Antioch startup](../../antioch-platform/references/simulation-code.md)
 
 Read stage units, up-axis, default prim, layer stack, load rules, and edit target before editing. `/World` and meter/Z-up are common conventions, not USD requirements. A missing prim can be inactive, unloaded, in another variant, behind a broken reference, or at a different path.
 
-See also [usd.md](usd-composition-architecture.md) and [usd-pipeline.md](usd-pipeline.md).
+See also [usd-pipeline.md](usd-pipeline.md).
 
 ## When to use
 
@@ -43,11 +37,11 @@ Isaac Sim's recommended asset structure splits a robot into one binary geometry 
             mujoco.usda                    <- MuJoCo-only tuning (sublayers physics.usda)
 ```
 
-USD `payload` arcs enable **lazy loading** — a payload is only loaded when explicitly requested. This is the key to RL startup optimization when appearance is not needed.
+USD payloads can be excluded by stage load rules. Opening a stage normally loads them; choose load rules deliberately when appearance is unnecessary.
 
 ## File Format Decision Guide
 
-The rule is simple: **binary crate (`.usdc`) for raw mesh data, USDA for everything else.** The Asset Transformer's `GeometriesRoutingRule` enforces this split automatically.
+The layout below uses binary crate for large geometry arrays and USDA for editable configuration. Other layouts are valid; choose formats for size, load cost, and editability.
 
 | Layer | Format | Why |
 |---|---|---|
@@ -89,7 +83,7 @@ def PhysicsRevoluteJoint "FL_hip_joint" {
     rel physics:body1 = </Robot/FL_hip>
 }
 
-def RigidBodyAPI "trunk" {
+def Xform "trunk" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
     float physics:mass = 4.713
     point3f physics:centerOfMass = (0.012, 0.002, -0.002)
     float3 physics:diagonalInertia = (0.0120, 0.0220, 0.0270)
@@ -101,12 +95,12 @@ def RigidBodyAPI "trunk" {
 ```usda
 #usda 1.0
 
-def PhysxJointAPI "FL_hip_joint" {
+over "FL_hip_joint" (prepend apiSchemas = ["PhysxJointAPI"]) {
     float physxJoint:maxJointVelocity = 20.0
     float physxJoint:jointFriction = 0.05
 }
 
-def PhysxRigidBodyAPI "trunk" {
+over "trunk" (prepend apiSchemas = ["PhysxRigidBodyAPI"]) {
     bool physxRigidBody:enableGyroscopicForces = true
     float physxRigidBody:maxDepenetrationVelocity = 10.0
     int physxRigidBody:solverPositionIterationCount = 32
@@ -118,13 +112,10 @@ def PhysxRigidBodyAPI "trunk" {
 
 ## RL optimization: skip appearance
 
-The biggest RL training startup optimization: **don't load appearance payloads**.
-
-When Isaac Lab loads a robot for RL:
-1. Loads: `interface.usda` + base + physics layers (joints, masses, collision shapes).
-2. Skips: `materials.usda` and `Textures/` (irrelevant for physics sim).
-
-Lab `ArticulationCfg` belongs to isaac-lab-3. The pattern is: spawn the composed `interface.usda` and do not pull appearance payloads when physics-only.
+For physics-only work, inspect whether appearance is a separate payload
+that can stay unloaded. Keep all required collision and physics data loaded;
+Lab does not automatically omit every material or texture. Profile startup
+and memory before restructuring the asset.
 
 Flattening does not embed external textures. Open the delivered entry point in a fresh context and inspect dependencies, bounds, materials, and required physics.
 

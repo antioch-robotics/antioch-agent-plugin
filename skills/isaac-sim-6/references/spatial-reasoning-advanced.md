@@ -1,44 +1,45 @@
-# Advanced
+# Advanced spatial reasoning
 
 Adapted from NVIDIA [`spatial-reasoning/advanced.md`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/spatial-reasoning/advanced.md) (Apache-2.0).
 
-Read [Isaac Sim on Antioch](../SKILL.md) for startup, imports, and runtime configuration.
-Native snippets run after startup, inside project functions or an active kernel.
-Linked upstream scripts are source examples, not installed plugin commands.
+[Isaac Sim task index](../SKILL.md#domain-references) · [Antioch startup](../../antioch-platform/references/simulation-code.md)
 
-## Bbox Offset Correction (Critical for Asset Placement)
+Use this after [units and transforms](spatial-reasoning.md) for large layouts, tight placement, paths, or repeated assets. The linked upstream scripts are examples to inspect and adapt, not installed helpers. Run native fragments inside a function or cell after [startup](../../antioch-platform/references/simulation-code.md).
 
-Most USD assets are NOT centered at origin. When placing an asset at a target position,
-you must subtract the asset's bbox center to land it where you want it:
+## Bbox offset correction
+
+A USD asset may have an origin far from its geometry. When placing an asset at a target position,
+align its transformed bounds with the target. This example assumes an unrotated asset already in the parent's units:
 
 ```python
 # Target position from cube block
 target_x, target_y, target_z = block["x"], block["y"], block["z"]
 
 # Asset bbox center (computed from BBoxCache)
-asset_cx, asset_cy, asset_cz_min = bbox["cx"], bbox["cy"], bbox["cz"]
+asset_cx, asset_cy, asset_cz_min = bbox["cx"], bbox["cy"], bbox["min_z"]
 
 # Corrected translation
 translate = Gf.Vec3d(
     target_x - asset_cx,  # X offset correction
     target_y - asset_cy,  # Y offset correction
-    -asset_cz_min,  # Ground the asset (base at Z=0)
+    target_z - asset_cz_min,  # Align the base with the support height
 )
 ```
 
-**Without this correction, assets land tens or hundreds of meters from their intended position.**
+For rotated or scaled assets, transform the bounds before choosing the support point. Author the offset on a placement wrapper so the referenced asset keeps its original transform stack. See [the asset pipeline](usd-pipeline.md#the-placeholder-to-asset-pipeline).
 
-### Computing Bbox in Kit Runtime (Most Reliable)
+### Computing composed bounds
 
 ```python
+from pxr import Usd, UsdGeom
+
 bc = UsdGeom.BBoxCache(Usd.TimeCode.Default(), [UsdGeom.Tokens.default_])
-# Temporarily reference asset to get composed bbox
+# Use a temporary path owned by this measurement.
 test = stage.DefinePrim("/BBoxTest", "Xform")
 test.GetReferences().AddReference(asset_path)
-for _ in range(5):
-    app.update()  # composition resolve; check the bound is finite, not a fixed-frame proof
 r = bc.ComputeWorldBound(test).ComputeAlignedRange()
 mn, mx = r.GetMin(), r.GetMax()
+# Check finite, nonempty bounds; missing payloads or references need investigation.
 stage.RemovePrim("/BBoxTest")
 ```
 
@@ -46,7 +47,8 @@ stage.RemovePrim("/BBoxTest")
 
 - **Per-block**: One asset per cube placeholder. Best for small assets (racks, conveyors). No overshoot.
 - **Tiled**: One large assembly covers multiple cubes. Risk of corridor intrusion. Validate zone boundaries.
-- **Rule of thumb**: If asset is >50% of zone width, use per-block placement.
+- Measure the assembly against the available zone and clearances before choosing either strategy.
+
 ## Advanced Transform Mathematics
 
 ### Quaternion Rotation (Gimbal Lock Avoidance)
@@ -74,8 +76,13 @@ v_rot = v·cos(θ) + (k × v)·sin(θ) + k·(k · v)·(1 - cos(θ))
 ```python
 def rodrigues_rotate(v, axis, angle_rad):
     """Rotate vector v around unit axis by angle (radians)."""
+    import math
+
     c, s = math.cos(angle_rad), math.sin(angle_rad)
-    k = axis
+    length = math.sqrt(sum(value * value for value in axis))
+    if length == 0:
+        raise ValueError("Rotation axis must be nonzero")
+    k = tuple(value / length for value in axis)
     dot = sum(a * b for a, b in zip(k, v))
     cross = (k[1] * v[2] - k[2] * v[1], k[2] * v[0] - k[0] * v[2], k[0] * v[1] - k[1] * v[0])
     return tuple(v[i] * c + cross[i] * s + k[i] * dot * (1 - c) for i in range(3))
@@ -83,7 +90,7 @@ def rodrigues_rotate(v, axis, angle_rad):
 
 ### Polar Decomposition (Extract Rotation + Scale from Matrix)
 
-Given an arbitrary 4×4 matrix M, decompose into M = T·R·S:
+For a Gf row-vector transform without shear, scale, rotation, and translation compose as `S * R * T`. A general matrix can also contain shear or reflection; do not silently discard either when decomposing it:
 
 _See `decompose_transform()` in [`scripts/spatial.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/spatial-reasoning/scripts/spatial.py) (26 lines)._
 
@@ -92,25 +99,25 @@ _See `decompose_transform()` in [`scripts/spatial.py`](https://github.com/isaac-
 
 ### R-Tree (Best for 2D/3D range queries — warehouse floor plans)
 
-R-trees group nearby objects into bounding rectangles, enabling O(log n) range queries instead of O(n).
+R-trees group nearby objects into bounding rectangles so a query can skip unrelated regions. Cost depends on overlap and on how many results the query returns.
 
-_See `__init__()` in [`scripts/spatial.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/spatial-reasoning/scripts/spatial.py) (47 lines)._
+_See `RTreeNode` in [`scripts/spatial.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/spatial-reasoning/scripts/spatial.py) (47 lines)._
 
 
 **When to use which spatial index:**
 
-| Structure | Best For | Query Time | Build Time |
-|---|---|---|---|
-| R-tree | Range queries, overlapping bboxes | O(log n) | O(n log n) |
-| k-d tree | Nearest neighbor, point queries | O(log n) | O(n log n) |
-| Octree | 3D scenes, LOD, frustum culling | O(log n) | O(n log n) |
-| Grid | Uniform density, simple collision | O(1) | O(n) |
+| Structure | Useful for | Tradeoff |
+|---|---|---|
+| R-tree | Range queries and overlapping bounds | Overlapping nodes and many results increase query work |
+| k-d tree | Nearest-neighbor and point queries | Rebuild or update when points move; high dimensions reduce pruning |
+| Octree | Hierarchical 3D occupancy and spatial queries | Depth and sparse cells affect storage and traversal |
+| Grid | Nearby candidates at roughly uniform density | Cell size controls bucket size and the number of visited cells |
 
-For warehouse layouts (1000-5000 prims, mostly 2D floor placement): **uniform grid** is fastest and simplest.
+A grid is a useful first implementation for floor layouts. Profile the actual scene before choosing an index; update affected entries when objects move.
 
 ### Uniform Grid (Practical for Warehouse Collision Detection)
 
-_See `__init__()` in [`scripts/spatial.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/spatial-reasoning/scripts/spatial.py) (35 lines)._
+_See `SpatialGrid` in [`scripts/spatial.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/spatial-reasoning/scripts/spatial.py) (35 lines)._
 
 
 ## Collision Detection
@@ -122,6 +129,8 @@ Two convex shapes don't overlap if and only if there exists an axis where their 
 ```python
 def obb_overlap_2d(center_a, half_ext_a, angle_a, center_b, half_ext_b, angle_b):
     """Test if two 2D OBBs overlap using SAT."""
+
+    import math
 
     def get_axes(angle):
         c, s = math.cos(angle), math.sin(angle)
@@ -162,19 +171,22 @@ _See `astar_warehouse()` in [`scripts/spatial.py`](https://github.com/isaac-sim/
 
 ### Path Smoothing (Cubic Catmull-Rom Spline)
 
-Raw A* paths are jagged. Smooth with Catmull-Rom interpolation:
+Raw A* paths are jagged. Catmull-Rom interpolation can smooth them, but can also leave the free corridor. Recheck the swept robot footprint and turning limits after smoothing:
 
 _See `catmull_rom_point()` in [`scripts/spatial.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/spatial-reasoning/scripts/spatial.py) (36 lines)._
 
 
 ### Dubins Paths (Non-Holonomic Vehicles — Forklifts)
 
-For vehicles that can't strafe (forklifts, AGVs), Dubins paths give the shortest path composed of arcs and straight lines:
+For an ideal vehicle that moves forward with bounded curvature, Dubins paths combine arcs and straight lines. Compare all six feasible path families to find the shortest. The upstream sketch below computes only the LSL candidate; it is not a full planner or an obstacle check:
 
 ```python
-def dubins_path_length(start, goal, min_radius):
-    """Compute Dubins path length between two poses (x, y, heading_rad).
-    Returns length of shortest CSC or CCC path."""
+def dubins_lsl_length(start, goal, min_radius):
+    """Length of the LSL candidate between poses (x, y, heading_rad)."""
+    import math
+
+    if min_radius <= 0:
+        raise ValueError("Turning radius must be positive")
     dx = goal[0] - start[0]
     dy = goal[1] - start[1]
     d = math.sqrt(dx * dx + dy * dy) / min_radius
@@ -197,7 +209,7 @@ def dubins_path_length(start, goal, min_radius):
 
 ### 2D Maximal Rectangles Bin Packing (Floor Space Allocation)
 
-_See `__init__()` in [`scripts/spatial.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/spatial-reasoning/scripts/spatial.py) (74 lines)._
+_See `MaxRectsBinPack` in [`scripts/spatial.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/spatial-reasoning/scripts/spatial.py) (74 lines)._
 
 
 ## Visibility & Camera Mathematics
@@ -205,6 +217,9 @@ _See `__init__()` in [`scripts/spatial.py`](https://github.com/isaac-sim/IsaacSi
 ### Focal Length ↔ Field of View Conversion
 
 ```python
+import math
+
+
 def focal_to_fov(focal_mm, sensor_width_mm=36.0):
     """Convert focal length to horizontal FOV (degrees). Default: 36mm full-frame."""
     return 2 * math.degrees(math.atan(sensor_width_mm / (2 * focal_mm)))
@@ -215,14 +230,11 @@ def fov_to_focal(fov_deg, sensor_width_mm=36.0):
     return sensor_width_mm / (2 * math.tan(math.radians(fov_deg / 2)))
 
 
-# Common warehouse camera settings:
-# 12mm → 84.1° FOV — ultra-wide, top-down overview
-# 14mm → 75.4° FOV — wide overview
-# 18mm → 63.4° FOV — general purpose
-# 24mm → 49.1° FOV — corridor view
-# 35mm → 34.4° FOV — detail/equipment close-up
-# 50mm → 24.4° FOV — tight detail
+# With a 36 mm aperture: 18 mm focal length gives 90 degrees horizontal FOV.
+# Use the camera's actual aperture; focal length alone does not define FOV.
 ```
+
+USD cameras default to a horizontal aperture of 20.955 mm. The helpers above deliberately use a 36 mm full-frame example; pass the actual camera aperture for framing.
 
 ### Frustum Culling
 
@@ -231,76 +243,25 @@ _See `frustum_planes()` in [`scripts/spatial.py`](https://github.com/isaac-sim/I
 
 ## Coordinate System Conversions
 
-```python
-# USD (OpenUSD): Z-up, right-handed, meters
-# Unity: Y-up, left-handed, meters
-# Unreal: Z-up, left-handed, centimeters
+Read each asset's units, up-axis, handedness, and forward axis. USD permits different up-axes and unit scales. A change of basis must apply to positions, directions, rotations, and normals consistently; normals need an inverse-transpose under nonuniform scaling.
 
+For example, one convention mapping Z-up right-handed coordinates to Y-up left-handed coordinates swaps Y and Z: `(x, y, z) -> (x, z, y)`. This reverses handedness. Negating another axis would reverse it again. Decide where forward should point before choosing the mapping. For orientation matrices, use the corresponding basis transformation rather than swapping quaternion components by intuition.
 
-def usd_to_unity(x, y, z):
-    """USD (Z-up, RH) → Unity (Y-up, LH): swap Y↔Z, negate X."""
-    return (-x, z, y)
+For a Z-up, right-handed stage measured in meters, an Unreal mapping that keeps +X forward is `(x, y, z) -> (100*x, -100*y, 100*z)`. The inverse is `(x/100, -y/100, z/100)`. This converts to left-handed centimeters; confirm the source forward axis before applying it.
 
+## Warehouse layout constraints
 
-def unity_to_usd(x, y, z):
-    """Unity (Y-up, LH) → USD (Z-up, RH): swap Y↔Z, negate X."""
-    return (-x, z, y)
+The [upstream warehouse tables](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/spatial-reasoning/advanced.md#warehouse-layout-standards-real-world) include sizing values and standards citations that have not been verified here. Treat a simulation layout as task input, not a certified facility design. Derive the following from the actual robot, asset dimensions, facility plans, and applicable requirements:
 
+| Constraint | Measure or supply |
+|---|---|
+| Travel aisles | Swept robot footprint, turning radius, passing space, localization margin |
+| Rack placement | Assembly bounds, payload envelope, service access, floor and support constraints |
+| Loading docks | Vehicle approach, door opening, dock height, clearance for loading equipment |
+| Pedestrian and emergency routes | The facility's required clearance and access rules |
+| Sprinklers and rack bracing | Approved facility requirements; a bounding-box ratio cannot establish compliance |
 
-def usd_to_unreal(x, y, z):
-    """USD (Z-up, RH, meters) → Unreal (Z-up, LH, cm): negate Y, scale ×100."""
-    return (x * 100, -y * 100, z * 100)
-
-
-def unreal_to_usd(x, y, z):
-    """Unreal (Z-up, LH, cm) → USD (Z-up, RH, meters): negate Y, scale ÷100."""
-    return (x / 100, -y / 100, z / 100)
-```
-
-## Warehouse Layout Standards (Real-World)
-
-### Aisle Width Requirements
-
-| Type | Min Width | Typical | Standard |
-|---|---|---|---|
-| VNA (Very Narrow Aisle) | 1.6m | 1.8m | EN 15620, ANSI/RMI MH16.1 |
-| Conventional forklift | 3.0m | 3.5m | OSHA 1910.176 |
-| Wide aisle (counterbalance) | 3.5m | 4.0-4.5m | OSHA 1910.178 |
-| Pedestrian only | 0.9m | 1.2m | ADA, OSHA 1910.22 |
-| Fire lane | 2.4m | 3.0m | NFPA 13 / local code |
-| Truck dock approach | 18m | 25-30m | For 16m trailer turning |
-
-### Rack Height & Stability
-
-| Storage Type | Max Height | Clearance to Sprinkler | Standard |
-|---|---|---|---|
-| Standard selective | 7.6m (25ft) | 457mm (18in) min | NFPA 13, FM Global |
-| Double-deep | 7.6m | 457mm | RMI |
-| Drive-in/through | 10.7m (35ft) | 457mm | NFPA 13 |
-| VNA/ASRS | 12-40m | 457mm min, 914mm preferred | EN 15512 |
-| Mezzanine clearance | — | 2.3m min under, 2.1m above | OSHA 1910.22 |
-
-### Loading Dock Dimensions
-
-| Element | Dimension | Notes |
-|---|---|---|
-| Door opening width | 2.6m (8.5ft) | Standard trailer width |
-| Door opening height | 3.0m (10ft) | Standard trailer height |
-| Dock height | 1.2m (48in) | Standard trailer bed height |
-| Dock leveler length | 1.8-3.0m | Bridges gap + height difference |
-| Approach apron | 18-30m | Turning radius for 16m trailer |
-| Dock seal/shelter | 3.0×3.4m | Weather protection |
-| Dock spacing (center-center) | 3.6-4.0m | One per trailer bay |
-
-### Fire Safety Spacing (NFPA 13)
-
-| Configuration | Flue Space | Transverse | Longitudinal |
-|---|---|---|---|
-| Single-row rack | 76mm (3in) | — | — |
-| Double-row rack | 152mm (6in) min | 152mm | 76mm |
-| ASRS (high-pile) | As designed | — | — |
-| Top-of-storage to sprinkler | 457mm (18in) min | — | — |
-| In-rack sprinklers needed | >3.7m (12ft) high | — | NFPA 13 Ch. 20 |
+Keep these constraints in layout parameters so the same checks run after every placement change. Do not infer walkable space from a shell's outer bounding box.
 
 ### ABC Analysis for SKU Placement
 
@@ -313,6 +274,8 @@ def abc_classify(skus):
     """
     sorted_skus = sorted(skus, key=lambda s: s["annual_picks"], reverse=True)
     total_picks = sum(s["annual_picks"] for s in sorted_skus)
+    if total_picks <= 0:
+        return sorted_skus
     cumulative = 0
     for sku in sorted_skus:
         cumulative += sku["annual_picks"]
@@ -326,13 +289,15 @@ def abc_classify(skus):
     return sorted_skus
 ```
 
-**Golden zone:** Items picked most frequently should be at ergonomic height (waist to shoulder: 0.6-1.5m) and closest to shipping docks.
+ABC placement groups items by demand. The 80% and 95% cutoffs above are example inputs; choose them for the workload. Place frequently picked items where the intended robot or operator can reach them, and measure travel distance rather than assuming a layout is efficient.
 
 ### Travel Distance Optimization
 
 ```python
 def total_travel_distance(pick_list, rack_positions, dock_position):
     """Compute total travel distance for a pick route using nearest-neighbor."""
+    import math
+
     pos = dock_position
     total = 0
     remaining = list(pick_list)
@@ -350,17 +315,18 @@ def total_travel_distance(pick_list, rack_positions, dock_position):
 ### Epsilon Comparisons
 
 ```python
-EPSILON = 1e-7  # For single-precision float comparisons
-EPSILON_D = 1e-12  # For double-precision
+import math
+
+EPSILON = 1e-7  # Example tolerance; choose it for the scene scale and operation.
 
 
 def nearly_equal(a, b, eps=EPSILON):
     return abs(a - b) <= eps * max(1.0, abs(a), abs(b))
 
 
-def bbox_valid(mn, mx, eps=1e30):
+def bbox_valid(mn, mx):
     """Check if a bbox is valid (not infinity/NaN)."""
-    return all(mn[i] < eps and mx[i] > -eps and mn[i] <= mx[i] for i in range(3))
+    return all(math.isfinite(mn[i]) and math.isfinite(mx[i]) and mn[i] <= mx[i] for i in range(3))
 
 
 def safe_normalize(v, fallback=(1, 0, 0)):
@@ -371,16 +337,16 @@ def safe_normalize(v, fallback=(1, 0, 0)):
     return tuple(c / length for c in v)
 ```
 
-### Robust Orientation Test (Shewchuk-style)
+### Orientation test
 
 ```python
 def orient2d(a, b, c):
-    """Robust 2D orientation test. Returns:
+    """Floating-point 2D orientation test. Returns:
     > 0 if c is left of line a→b (counterclockwise)
     < 0 if c is right (clockwise)
     = 0 if collinear
-    Uses exact arithmetic expansion for robustness."""
-    # Simple version (sufficient for warehouse-scale coordinates)
+    Near zero, floating-point rounding can change the sign."""
+    # Use an adaptive exact predicate when near-collinear signs matter.
     det = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
     return det
 ```
@@ -388,43 +354,24 @@ def orient2d(a, b, c):
 ## Additional theoretical notes
 
 ### Dual Quaternion Skinning
-Combines rotation and translation for smooth deformation. Dual quaternion: `q̂ = q + ε·t·q`
-where `q` is rotation quaternion and `t` is translation. Interpolate: slerp the real part,
-lerp the dual part. Use for skinned mesh animation (digital humans walking).
+
+Dual quaternions represent rigid rotation and translation together. They are useful for skeletal animation because blending rigid transforms avoids some matrix-blending artifacts. Use a library that normalizes the result and handles antipodal quaternion signs. This animation representation does not simulate physical contact.
 
 ### OBB via PCA
-Compute Oriented Bounding Box using Principal Component Analysis:
-1. Compute covariance matrix of mesh vertices
-2. Eigenvectors = OBB axes, eigenvalues = spread along each axis
-3. Project vertices onto eigenvectors for tight extents
-Result: Tighter fit than AABB, especially for elongated objects (conveyors, racks).
 
-### Seismic Bracing Rule
-`bracing_factor = rack_height / base_width`
-- If factor > 2.0: seismic bracing required (cross-bracing between uprights)
-- If factor > 3.0: engineering review mandatory
-- Standards: EN 15512 for Europe; Rack Manufacturers Institute ANSI MH16.1 for the US
+Compute the covariance of mesh vertices, find its eigenvectors, then project vertices on those axes to get oriented extents. This often gives tighter bounds for elongated objects than an AABB. It is not a minimum-volume box, and nearly symmetric geometry can produce unstable axes.
 
-### Bin Packing Complexity
-- 2D bin packing: NP-hard. First-Fit Decreasing Height (FFDH) achieves 1.7× optimal.
-- 3D bin packing: NP-hard. Bottom-Left-Fill heuristic works for pallet loading.
-- Strip packing (conveyors): 2× approximation ratio is achievable in polynomial time.
-- MaxRects (Best Short Side Fit): Best practical heuristic for floor space allocation — 85-95% utilization typical.
+### Bin Packing
 
-### BSP Trees for PVS (Potentially Visible Set)
-For large warehouse interiors (>1000 prims), precompute PVS using BSP (Binary Space Partition):
-1. Subdivide space along major architectural planes (rack rows, corridor walls)
-2. For each cell, ray-cast to determine which other cells are visible
-3. Store as bitfield: `pvs[cell_id] = set(visible_cell_ids)`
-4. At render time, only submit geometry from visible cells
-Reduces draw calls from O(n) to O(visible) — critical for real-time warehouse flythrough.
+MaxRects and first-fit heuristics are useful ways to assign floor space. Score the result against the actual footprint, rotation restrictions, clearance, and access constraints. High area utilization can leave unusable aisles. See the upstream `MaxRects` example in the linked spatial helpers for a starting implementation.
+
+### BSP Trees and Potentially Visible Sets
+
+A large interior can be partitioned along walls or other architectural planes. A potentially visible set records regions that might be visible from each region, allowing a renderer to skip unrelated geometry. The set must be conservative: a few rays do not prove a region is invisible. Use the renderer's culling support and profile before implementing custom visibility logic.
 
 ### Dubins Path Types
-Six path types for non-holonomic vehicles: LSL, RSR, LSR, RSL, RLR, LRL
-- L = left turn (arc), R = right turn (arc), S = straight
-- Minimum turning radius for warehouse AGVs: 1.5-2.0m
-- For forklifts (Ackermann steering): 2.5-3.5m minimum radius
-- Dubins path gives the shortest C¹-continuous path between two oriented poses
+
+The six path families are LSL, RSR, LSR, RSL, RLR, and LRL: L/R are constant-radius turns and S is straight motion. The model assumes forward-only motion and a minimum turning radius. Vehicles that reverse need another model, such as Reeds-Shepp. Derive turning limits from the actual robot and check obstacles separately; see [navigation primitives](navigation-primitives.md).
 
 ## Containment verification
 
@@ -443,27 +390,17 @@ world_min, world_max = r.GetMin(), r.GetMax()
 ```
 
 ### Container Interior Bounds
-For warehouse containment, derive interior from shell bbox:
-```python
-shell_range = bbox_cache.ComputeWorldBound(shell_prim).ComputeAlignedRange()
-MARGIN = 2.0  # meters clearance from walls
-interior_min = shell_range.GetMin() + Gf.Vec3d(MARGIN, MARGIN, 0)
-interior_max = shell_range.GetMax() - Gf.Vec3d(MARGIN, MARGIN, 0)
-```
+
+Read the actual floor boundary, wall collision geometry, openings, and task zones. An outer shell AABB includes wall thickness, exterior space, and possibly empty courtyards. Shrinking it by a fixed margin does not recover the usable interior.
 
 ### Delta Transform Rule
-When modifying transforms on prims with child geometry:
-1. Read original matrix: `orig = xf.ComputeLocalToWorldTransform()`
-2. Copy: `new_mat = Gf.Matrix4d(orig)`
-3. Modify ONLY translation: `new_mat.SetTranslateOnly(old_t + delta)`
-4. Write back: `xf.MakeMatrixXform().Set(new_mat)`
 
-NEVER construct a fresh identity matrix and set a new position — this destroys
-the rotation/scale that child prims depend on.
+Keep the prim's existing rotation and scale. A local matrix lives in parent space, so transform a world displacement by the inverse parent transform's linear part before changing local translation. `SetTranslateOnly()` preserves other matrix entries. Write to an owned placement wrapper or the appropriate existing translation op; replacing an imported animated stack can erase authored behavior. Never write a world matrix back as a local matrix under a transformed parent.
 
 ### Mandatory Post-Transform Verification
 After modifying any prim transform, verify world bounds:
 ```python
+bbox_cache.Clear()
 for prim in modified:
     bb = bbox_cache.ComputeWorldBound(prim).ComputeAlignedRange()
     assert bb.GetMin()[0] >= IX_MIN, f"{prim.GetPath()} exceeds west wall"
@@ -475,35 +412,32 @@ Zero AABB-containment violations required before treating the layout as inside t
 ## Block proxy → real asset swap
 
 ### Solid cubes vs real geometry density gap
-UsdGeom.Cube fills 100% of its footprint as a solid opaque slab.
-Real rack compositions are 60-70% empty air (shelves + gaps between goods).
-1:1 block replacement will ALWAYS look 40-50% sparser at top-down scale.
 
-**Mitigation:**
-- Add zone-aware floor clutter (pallets, boxes, crates) in every gap
-- Target 0.3-0.8 items/m² depending on zone type
-- Stack items 1-4 levels vertically for pallet staging areas
-- Grid-based occupancy check prevents double-placement
+A cube fills its volume; a rack contains shelves, openings, and sometimes cargo. Compare the proxy and real scene from the same camera. Choose loaded or empty variants to match the task. Add pallets, boxes, or clutter only where the scenario needs them, and check access and overlap after placement.
 
 ### Asset scale matching
-Each block has exact W×D×H dimensions. Real assets have different native sizes.
-Must compute per-axis scale factors:
+
+Measure native dimensions before replacing proxies. Prefer a module that fits naturally. If rescaling is part of the task, `sx = target_width / asset_width` gives an axis scale; apply the same reasoning to depth and height. Reject zero dimensions and inspect nonuniform scale because it changes mechanical dimensions, collision, mass, and inertia. Do not silently clamp a bad fit into an arbitrary range.
+
+For an axis-aligned asset whose bounds are already in the wrapper's parent space, this matrix maps its minimum corner and dimensions to a target box:
+
 ```python
-sx = block_w / asset_w
-sy = block_d / asset_d
-sz = block_h / asset_h
-# Clamp to prevent absurd distortion
-sx, sy, sz = [max(0.05, min(s, 30.0)) for s in [sx, sy, sz]]
-# Offset for asset origin
-tx = block_x - asset_min_x * sx
-ty = block_y - asset_min_y * sy
-tz = block_z - asset_min_z * sz
-mat = Gf.Matrix4d(sx, 0, 0, 0, 0, sy, 0, 0, 0, 0, sz, 0, tx, ty, tz, 1)
+from pxr import Gf
+
+size = asset_max - asset_min
+if any(size[i] <= 0 or target_size[i] <= 0 for i in range(3)):
+    raise ValueError("Asset and target dimensions must be positive")
+scale = Gf.Vec3d(*(target_size[i] / size[i] for i in range(3)))
+offset = Gf.Vec3d(*(target_min[i] - asset_min[i] * scale[i] for i in range(3)))
+placement = Gf.Matrix4d().SetScale(scale) * Gf.Matrix4d().SetTranslate(offset)
+# Apply to a new wrapper, not the asset's existing transform stack.
 ```
-Without this, assets land at wrong positions and wrong sizes.
+
+This example has no rotation. For a rotated target, transform and check all bound corners after placement.
 
 ### Block dimensions are individual positions
-Placeholder cubes are often individual rack/pallet positions (example 2–4 m wide, 1–2 m deep), not full rack rows. A long rack assembly (example 3.1×83.1 m) is far bigger than any single block. Place one asset per block at matched scale, not one giant assembly covering the row.
+
+A placeholder may represent one rack bay rather than a complete row. Measure both the placeholder and the referenced assembly. Use one suitable module per position or tile an assembly across several positions, then verify zone boundaries and aisles.
 
 ### Loaded vs empty rack variants
 - Composition / loaded variants include crates/boxes on shelves.
@@ -512,25 +446,17 @@ Placeholder cubes are often individual rack/pallet positions (example 2–4 m wi
 
 A vision-model density score is not placement evidence. Compare proxy vs real at the same camera, check zone type/size, and confirm bounds against the shell.
 
-### Zone-aware clutter fill (example densities)
-```python
-ZONES = [
-    # (name, x1, y1, x2, y2, density_per_m2, asset_pool, max_stack) — example warehouse
-    ("Receiving", 3, 0, 170, 15, 0.6, pallets + boxes, 3),
-    ("Storage_floor", 3, 16, 170, 90, 0.3, boxes, 2),
-    ("Staging", 82, 90, 170, 100, 0.6, pallets + crates, 3),
-    ("Shipping", 3, 125, 170, 134, 0.6, pallets + boxes, 3),
-]
-# Grid-walk at step = 1/sqrt(density), 85% fill rate, occupancy check
-```
+### Zone-aware clutter fill
+
+For a requested clutter density `d` objects per square meter, a grid spacing of `1 / sqrt(d)` is a starting point. Sample only within allowed zones, reject placements whose full bounds intersect obstacles, preserve travel corridors, and seed any randomness. Stacking also needs support-surface and contact checks. Density alone does not define a realistic warehouse.
 
 ### Capture notes
-- Viewport capture: `omni.kit.viewport.utility.capture_viewport_to_file` (or `antioch.capture_viewport()`). This is the active viewport, not a sensor camera or Replicator product. See [rendering.md](isaac-sim-rendering.md) / [sensors.md](isaac-sim-sensor.md).
+- Viewport capture: `omni.kit.viewport.utility.capture_viewport_to_file` (or `antioch.capture_viewport()`). This is the active viewport, not a sensor camera or Replicator product. See [rendering](isaac-sim-rendering.md) / [sensors](isaac-sim-sensor.md).
 - Settings: `carb.settings.get_settings()`, not `ExtensionManager.get_settings()`.
 - Project Python must keep `pxr` / `omni` / `carb` / `isaacsim` imports inside functions or `TYPE_CHECKING`. Native fragments in this file are function/cell bodies after startup.
 - Replicator annotators can fail on very heavy stages; viewport capture is a fallback for a picture, not a substitute for required annotators.
 - `instanceable=True` with many unique composition meshes can exhaust GPU memory. Instance proxies are read-only.
-- Add explicit lights when you want them; a high-intensity DomeLight can wash the background white. Default viewport lighting is a different look from a authored DomeLight.
+- Add explicit lights when you want them; a high-intensity DomeLight can wash the background white. Default viewport lighting is a different look from an authored DomeLight.
 - Malformed `geomSubset`s on some catalog assets: fall back to a simpler proxy or a known-good tile after inspecting the USD.
 
 
@@ -541,69 +467,57 @@ When rendering a single object (e.g. stacked pallet), frame the camera to captur
 _See `compute_camera_distance()` in [`scripts/spatial.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/spatial-reasoning/scripts/spatial.py) (31 lines)._
 
 
-Key lessons:
-- Eye height at object midpoint for balanced framing
-- 3/4 view angle (45° from front) shows depth best
-- Side views need longer focal length (50mm+) to reduce distortion
-- Top-down: place camera at ~1.5× object height, target at object center
-- Always add 20-30% margin to prevent clipping at edges
+Use the camera's horizontal and vertical FOV and all transformed bound corners. In the simple centered plane case, the required distance is `half_extent / tan(fov / 2)` on each axis; choose the larger result and add room for depth and a framing margin. Check the near/far clipping planes. Eye height at the object midpoint and a three-quarter view are useful starting points, not required views.
 
 ## Multi-object camera framing
 
-When framing multiple objects (e.g., 5 pallets in a line):
-```python
-# Compute required distance from line length and FOV
-line_len = last_y - first_y + object_width  # total span
-focal = 22.0  # wide angle for groups
-fov_h = 2 * math.atan(aperture / (2 * focal))
-dist = (line_len / 2) / math.tan(fov_h / 2) * 1.3  # 30% margin
+For a group of objects, use their combined world bounds and both camera apertures. A bounding sphere gives a conservative starting distance that works at any orbit angle:
 
-# Place camera at 35° orbit, 25° elevation from center of group
-center_y = (first_y + last_y) / 2
-eye = (dist * cos(elev) * sin(angle), center_y - dist * cos(elev) * cos(angle), center_z + dist * sin(elev))
+```python
+def group_camera_eye(bounds_min, bounds_max, focal_mm, aperture_x_mm, aperture_y_mm, azimuth_deg=35, elevation_deg=25, margin=1.15):
+    import math
+
+    if min(focal_mm, aperture_x_mm, aperture_y_mm) <= 0 or margin < 1:
+        raise ValueError("Lens dimensions must be positive and margin at least 1")
+    center = tuple((lo + hi) / 2 for lo, hi in zip(bounds_min, bounds_max))
+    radius = math.sqrt(sum((hi - lo) ** 2 for lo, hi in zip(bounds_min, bounds_max))) / 2
+    if radius <= 0 or any(hi < lo for lo, hi in zip(bounds_min, bounds_max)):
+        raise ValueError("Group bounds must have positive extent")
+    half_fov = min(math.atan(aperture_x_mm / (2 * focal_mm)), math.atan(aperture_y_mm / (2 * focal_mm)))
+    distance = radius / math.sin(half_fov) * margin
+    azimuth, elevation = map(math.radians, (azimuth_deg, elevation_deg))
+    eye = (
+        center[0] + distance * math.cos(elevation) * math.sin(azimuth),
+        center[1] - distance * math.cos(elevation) * math.cos(azimuth),
+        center[2] + distance * math.sin(elevation),
+    )
+    return eye, center
 ```
+
+Aim at the returned center using [look-at camera math](spatial-reasoning.md#look-at-camera-math). Read the actual focal length and horizontal/vertical aperture in matching units. Check clipping planes and inspect the render; a long row may look better with tighter framing than its bounding sphere provides.
 
 ## Placement with PointInstancers
 
-For repeated identical objects (boxes on pallets, rack bays, etc.), use `UsdGeom.PointInstancer` instead of individual prims. Group by (asset, rotation) — each group gets one prototype and an array of positions.
+For repeated geometry, `UsdGeom.PointInstancer` stores prototypes and per-instance transforms without one composed prim per copy. Group by the geometry and material requirements; orientations and scales can differ per instance.
 
-**Key spatial reasoning for instanced placement:**
-- Positions are in WORLD SPACE (not local to instancer)
-- Rotation baked into prototype means all instances share the same orientation
-- For cross-stacking, create SEPARATE instancers for 0° and 90° groups
-- Grid math is identical whether using prims or instancers — the stacker computes positions the same way
-- A point instancer is not an independently simulated articulation
+Positions are **local to the instancer**, as specified by the [OpenUSD API](https://openusd.org/release/api/class_usd_geom_point_instancer.html). The instancer's transform maps them into the scene. Use `protoIndices`, `positions`, and optional orientations/scales with consistent array lengths. Separate instancers for 0° and 90° rotations are not required. A point instancer is not a group of independently controlled articulations.
 
 ## Surface detection on mesh geometry
 
 When placing objects on top of mesh geometry (e.g., pallets on rack beams), vertex positions alone are insufficient. Three approaches, in order of accuracy:
 
-### 1. Vertex Mean Clustering (least accurate)
-```python
-# Cluster vertex Z values, use mean of cluster
-# Problem: beam meshes extend above the mean → objects penetrate
-# Typical error: ~8mm below true surface
-```
+### 1. Vertex clustering
 
-### 2. Vertex z_max with Normal Filtering (good)
-```python
-# Only use vertices from upward-facing faces (normal.z > 0.7)
-# Use z_max of each cluster
-# Typical error: ~2-3mm (add 5mm clearance)
-normals = mesh.GetNormalsAttr().Get()
-for face in faces:
-    if face_normal.z > 0.7:
-        surface_z = max(vertex.z for vertex in face_verts)
-```
+Cluster vertex heights to find candidate shelves. Cluster means can fall inside the geometry, and maxima can include a rail rather than the support surface. Treat this as a coarse search.
 
-### 3. PhysX Raycast (most accurate, TODO)
-```python
-# Cast ray downward from above, get exact hit point
-# Bypasses all vertex analysis — gets renderer's actual surface
-# from omni.physx import get_physx_scene_query_interface
-# Requires collision mesh on the rack
-```
+### 2. Upward-facing surfaces
 
-**Key lesson:** Thin horizontal geometry (beams, shelves, panels) has vertex distributions that don't cluster cleanly. The "top surface" is a subset of vertices on upward-facing faces, not the cluster center or even cluster max of ALL vertices. Always filter by face normal direction before computing placement Z.
+Inspect faces whose normals point toward the stage's up-axis, then find the support region under the object's whole footprint. Transform vertices and normals into a common space. Respect the mesh's normal interpolation and orientation; a single vertex height cannot establish stable support.
+
+### 3. Physics scene query
+
+A downward ray or shape query against the intended collision geometry can provide a support hit. Use the [physics query guidance](physics-simulation.md#raycast-scene-query) for the selected backend. Check units, filters, and collision approximation: the collision surface can differ from the rendered mesh. Multiple footprint samples or a shape query can catch gaps that a center ray misses.
+
+These methods answer different questions. Verify the final placement and, when contact matters, let the physics settle and read live state before recording a [scenario check](../../scenario-design/SKILL.md).
 
 Antioch owns the remote Kit process. Do not kill, restart, or drive Isaac through host JSON command files. Reuse the session for shots that share scene state; see [../SKILL.md](../SKILL.md) and [antioch-platform](../../antioch-platform/SKILL.md).

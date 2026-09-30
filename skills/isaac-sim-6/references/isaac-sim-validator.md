@@ -2,6 +2,8 @@
 
 Adapted from NVIDIA [`isaac-sim-validator/SKILL.md`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/isaac-sim-validator/SKILL.md) (Apache-2.0).
 
+[Isaac Sim task index](../SKILL.md#domain-references) · [Antioch startup](../../antioch-platform/references/simulation-code.md)
+
 Read [Isaac Sim on Antioch](../SKILL.md) for startup and import rules, and
 [scenario design](../../scenario-design/SKILL.md) for recorded verdicts.
 
@@ -29,8 +31,7 @@ Use the authorized Antioch session and a bounded experiment.
   when composition and conversion are correct.
 - Keep intended rigid-body ownership and joint frames. Choose collision
   approximations and instancing for the task; neither has one universal setting.
-- Deliver reusable paths and configuration. Runtime asset URLs may be valid;
-  resolve all dependencies when exporting a portable asset.
+- Deliver reusable paths and configuration. Avoid hardcoded paths under Linux `/home` or Windows `C:\`, per-agent home directories, and bare IP endpoints. Accept asset paths, endpoints, and the output directory through arguments or configuration. Runtime asset URLs may be valid; resolve all dependencies when exporting a portable asset.
 - Define expected outputs and stopping conditions before execution. Script
   byte count and an arbitrary number of simulated seconds prove neither.
 
@@ -71,6 +72,8 @@ The upstream [validation script](https://github.com/isaac-sim/IsaacSim/blob/7c20
 is a source example, not an installed command or Antioch acceptance gate. Its
 local-launch and demo-specific thresholds need adaptation. Prefer project
 checks and recorded scenarios for reusable validation.
+
+For context, the upstream demo gate uses a script size above 1 KB, a rendered image of at least 150 KB with mean RGB above 30, at least 3 seconds of physics, and more than 20% VRAM headroom after settling. These are demo-specific heuristics, not Antioch requirements: a small valid script or intentionally dark image may fail them, and passing them does not prove the requested behavior. Set checks from the deliverable's needs.
 
 Use the [quality rubric](isaac-sim-validator-references-quality-criteria.md)
 to select criteria for the deliverable.

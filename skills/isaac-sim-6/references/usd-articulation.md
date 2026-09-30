@@ -2,13 +2,7 @@
 
 Adapted from NVIDIA [`usd-articulation/SKILL.md`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/usd-articulation/SKILL.md) (Apache-2.0).
 
-Read [Isaac Sim on Antioch](../SKILL.md) for startup, imports, and runtime configuration.
-Native snippets run after startup, inside project functions or an active kernel.
-Linked upstream scripts are source examples, not installed plugin commands.
-
-## Purpose
-
-Assemble and validate multi-link robot articulations with ArticulationRootAPI, fixed joints, and Isaac robot schema overlays before deployment.
+[Isaac Sim task index](../SKILL.md#domain-references) · [Antioch startup](../../antioch-platform/references/simulation-code.md)
 
 A stage may contain several articulations; do not require one universal root or a fixed `ArticulationRootAPI` path for every scene. The "exactly one root" checklist below is for a **single multi-arm robot assembly**, not a facility stage.
 
@@ -94,4 +88,4 @@ Extend with whatever subsystem path patterns your asset uses. Binary goal for th
 | Importer applied `IsaacReferencePointAPI` | older asset | re-import with current Isaac Sim, or migrate to `IsaacSiteAPI` (deprecation warning) |
 | `robot_type` attribute value rejected | typo or stale token | pick from `get_allowed_tokens(Attributes.ROBOT_TYPE)` |
 
-Composition, layers, and delivery: [usd.md](usd-composition-architecture.md) / [usd-composition-architecture.md](usd-composition-architecture.md) / [usd-pipeline.md](usd-pipeline.md).
+Composition, layers, and delivery: [usd-composition-architecture.md](usd-composition-architecture.md) / [usd-pipeline.md](usd-pipeline.md).

@@ -2,13 +2,7 @@
 
 Adapted from NVIDIA [`mobility-gen/SKILL.md`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/mobility-gen/SKILL.md) (Apache-2.0).
 
-Read [Isaac Sim on Antioch](../SKILL.md) for startup, imports, and runtime configuration.
-Native snippets run after startup, inside project functions or an active kernel.
-Linked upstream scripts are source examples, not installed plugin commands.
-
-## Purpose
-
-Run MobilityGen two-phase SDG: record robot trajectories headlessly, then replay and render RGB/depth/segmentation/normal/pose outputs.
+[Isaac Sim task index](../SKILL.md#domain-references) · [Antioch startup](../../antioch-platform/references/simulation-code.md)
 
 Two-phase pipeline: **record trajectories** (physics, no rendering) → **replay & render** (sensors added).
 
@@ -22,12 +16,6 @@ Two-phase pipeline: **record trajectories** (physics, no rendering) → **replay
 | [`scripts/replay_custom_robot.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/mobility-gen/scripts/replay_custom_robot.py) | Replay recordings with a custom robot registered at runtime | see script --help |
 | [`scripts/wheeled_robot_subclass.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/mobility-gen/scripts/wheeled_robot_subclass.py) | Example WheeledMobilityGenRobot subclass for custom differential-drive robots | see script --help |
 
-## Read These Skills First
-
-- **[navigation-primitives](navigation-primitives.md)** — `OccupancyMap`, A* planner, robot footprints (Spot Z=0.69), differential/holonomic kinematics, look-at chase cameras, shared gotchas. MobilityGen consumes this substrate; this skill assumes you know it.
-- **[occupancy-map](occupancy-map.md)** — produces the `map.yaml` consumed by `OccupancyMap.from_ros_yaml`
-- **[data-collection-sim](data-collection-sim.md)** — sibling SDG path for static scenes with randomized object/camera poses (no robot trajectory)
-
 ## When To Use This Skill (vs siblings)
 
 | Goal | Use |
@@ -36,13 +24,9 @@ Two-phase pipeline: **record trajectories** (physics, no rendering) → **replay
 | Drive a robot through a scene in real time, see it move | [isaac-sim-robot-navigation](isaac-sim-robot-navigation.md) |
 | Annotated frames with no robot motion (object pose randomization) | [data-collection-sim](data-collection-sim.md) |
 
-## Related Skills
-
-- [navigation-primitives](navigation-primitives.md) — shared navigation substrate (read first)
-- [data-collection-sim](data-collection-sim.md) — static-scene SDG sibling
-- [isaac-sim-sensor](isaac-sim-sensor.md) — sensor primitives (camera, LiDAR, IMU, contact)
-- [isaac-sim-robot-navigation](isaac-sim-robot-navigation.md) — runtime navigation sibling
-- [antioch-platform](../../antioch-platform/SKILL.md) — headless startup, session dispatch, and stream configuration
+For map creation use [occupancy maps](occupancy-map.md), for footprint and
+controller work use [navigation primitives](navigation-primitives.md), and
+for custom sensors use [sensor guidance](isaac-sim-sensor.md).
 
 ## Environment
 
@@ -88,24 +72,42 @@ from isaacsim.replicator.experimental.mobility_gen import ROBOTS, SCENARIOS, Occ
 >
 > **Migration:** for the full `omni.isaac.*` → `isaacsim.*` mapping when porting scripts off the legacy World flow, see [Renaming Extensions](https://docs.isaacsim.omniverse.nvidia.com/latest/migration_guides/isaac_sim_4_5/extensions_renaming.html).
 
-`record_trajectories(scene_usd, omap_yaml, robot_type, scenario, num_episodes, max_steps, data_dir)` — headless SimulationApp loop that builds a robot and scenario and records each episode to `$MOBILITY_GEN_DATA/recordings/`.
+`record_trajectories(scene_usd, omap_yaml, robot_type, scenario, num_episodes, max_steps, data_dir)` builds a robot and scenario and records each episode to `$MOBILITY_GEN_DATA/recordings/`. Adapt its launcher to `antioch.application()` and keep one owner of physics stepping.
 
 `RecordingSession` call order — the session owns the ground plane, robot spawn, `Config` and writer, so scripts do not construct a `MobilityGenWriter` themselves:
 
 ```python
+# Inside the function that runs after Antioch simulation startup:
+import antioch
+from isaacsim.core.simulation_manager import SimulationEvent, SimulationManager
+import isaacsim.core.experimental.utils.app as app_utils
+
+simulation_app = antioch.application()
+# Open the stage and advance the app once before building.
+simulation_app.update()
 session = RecordingSession()
-session.build(robot_cls, scenario_cls, occupancy_map, scene_usd=..., cached_stage_path=..., recordings_dir=...)
-omni.timeline.get_timeline_interface().play()  # initialize() expects a playing app
+session.build(robot_cls, scenario_cls, occupancy_map, scene_usd=scene_usd, cached_stage_path=cached_stage_path, recordings_dir=recordings_dir)
+app_utils.play()
 simulation_app.update()
 session.initialize()
 session.reset()
 session.enable_recording()
-while ...:
-    SimulationManager.step(steps=1)  # initialize_physics() does not start the
-    simulation_app.update()  # timeline, so update() alone won't tick physics
-    if not session.step(robot_cls.physics_dt):
-        break
+
+
+def on_physics(step_dt, context):
+    session.step(step_dt)
+
+
+callback_id = SimulationManager.register_callback(on_physics, event=SimulationEvent.PHYSICS_POST_STEP)
+try:
+    while simulation_app.is_running() and not recording_finished():
+        simulation_app.update()  # Kit owns physics; the callback records its steps.
+finally:
+    SimulationManager.deregister_callback(callback_id)
+    session.disable_recording()
 ```
+
+`recording_finished()` is the caller's episode, simulated-time, or step budget. This callback pattern follows the shipped MobilityGen UI. A Kit update may contain more than one physics step, so record from the physics callback and use its `step_dt`; do not also call `SimulationManager.step()` in this loop. Check recorded timestamps and step counts in the target runtime before relying on dataset cadence.
 
 See [`scripts/record_trajectories.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/mobility-gen/scripts/record_trajectories.py).
 
@@ -169,9 +171,9 @@ declare their cameras in a YAML sensor-rig config instead of the
 | `KeyboardTeleoperationScenario` | Manual (WASD) | No — needs UI |
 | `GamepadTeleoperationScenario` | Manual (gamepad) | No — needs UI |
 | `RandomAccelerationScenario` | Automated (brownian) | Yes |
-| `RandomPathFollowingScenario` | Automated (A* path following) | Yes |
+| `RandomPathFollowingScenario` | Automated (breadth-first path search) | Yes |
 
-`RandomPathFollowingScenario` plans an A* path from the robot's current position to a random free-space goal and follows it with proportional steering. Episode ends when goal is reached or robot collides.
+`RandomPathFollowingScenario` runs breadth-first search from the robot's current grid cell, samples a reachable goal, and follows the reconstructed path with proportional steering. The episode ends at the goal or when its buffered occupancy-map check detects a collision. That map check does not measure physical contact.
 
 ## Add a Custom Robot
 
@@ -254,7 +256,7 @@ See [`scripts/replay_custom_robot.py`](https://github.com/isaac-sim/IsaacSim/blo
 - **`ModuleNotFoundError: No module named 'isaacsim.replicator.experimental.mobility_gen'`**: Extensions aren't auto-loaded. Enable `isaacsim.replicator.mobility_gen.examples` via `SimulationConfig.extensions`. All extension imports must come AFTER simulation startup.
 - **`KeyError: 'CarterRobot'` from `ROBOTS.get(...)` despite a clean import**: `ROBOTS` came from a different registry than the one the examples extension populates. Import it from `isaacsim.replicator.experimental.mobility_gen`.
 - **`ImportError: ...impl.utils.global_utils`** or **`get_world` / `new_world` / `join_sdf_paths` undefined**: removed with the legacy `World` flow. Use `RecordingSession` + `SimulationManager`, and `isaacsim.core.experimental.utils.prim.join_prim_paths`.
-- **Recording runs but every episode has 0 steps**: `session.step()` was called without advancing physics. `SimulationManager.initialize_physics()` does not start the Kit timeline, so `simulation_app.update()` alone does not tick physics — call `SimulationManager.step(steps=1)` each iteration.
+- **Recording runs but every episode has 0 steps**: confirm the timeline is playing, Kit keeps updating, and the post-physics callback calls `session.step(step_dt)`. `initialize_physics()` alone does not play the timeline. Do not combine manual `SimulationManager.step()` calls with a playing Kit loop; count physics callbacks to verify recording cadence.
 - **Replay `KeyError: 'MyRobot'`**: `replay_directory.py` only knows built-in robots. Write a wrapper script that registers your robot class before calling `load_scenario()`.
 - **Custom robot produces no images during replay**: Missing `front_camera_*` attributes, or `build()` passes `front_camera=None`. Add the attributes and call `cls.build_front_camera(prim_path)` in `build()`.
 - **`AttributeError: 'MyRobot' has no attribute 'chase_camera_base_path'`**: `chase_camera_base_path`, `chase_camera_x_offset`, `chase_camera_z_offset`, `chase_camera_tilt_angle` are required by `load_scenario()` even for headless recording.

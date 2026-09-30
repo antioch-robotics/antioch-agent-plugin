@@ -2,13 +2,7 @@
 
 Adapted from NVIDIA [`motion-generation/SKILL.md`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/SKILL.md) (Apache-2.0).
 
-Read [Isaac Sim on Antioch](../SKILL.md) for startup, imports, and runtime configuration.
-Native snippets run after startup, inside project functions or an active kernel.
-Linked upstream scripts are source examples, not installed plugin commands.
-
-## Purpose
-
-Build obstacle-aware arm and mobile-base motion with the motion_generation controller substrate; cuMotion with RMPflow is the reference arm implementation.
+[Isaac Sim task index](../SKILL.md#domain-references) · [Antioch startup](../../antioch-platform/references/simulation-code.md)
 
 Owns the generic `isaacsim.robot_motion.experimental.motion_generation` (`mg`)
 substrate and the phase-machine workflow for obstacle-aware end-effector
@@ -17,7 +11,7 @@ motion. The motion-generation controller is pluggable: cuMotion
 Lula are also motion-generation controllers but are not yet documented in this
 skill; see the stack-selection table in [manipulation-ik](manipulation-ik.md) to choose.
 
-Shared substrate lives in sibling skills:
+Load related guidance for the next part of the task:
 
 | Need | Read |
 |---|---|
@@ -32,33 +26,22 @@ Shared substrate lives in sibling skills:
 
 | Script | Purpose | Arguments |
 |---|---|---|
-| [`scripts/control_loop.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/scripts/control_loop.py) | Control loop | see script --help |
-| [`scripts/cumotion_setup.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/scripts/cumotion_setup.py) | Cumotion setup | see script --help |
-| [`scripts/frames_and_grasping.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/scripts/frames_and_grasping.py) | Frames and grasping | see script --help |
-| [`scripts/inspect_scene.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/scripts/inspect_scene.py) | Inspect scene | see script --help |
-| [`scripts/phase_machine.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/scripts/phase_machine.py) | Phase machine | see script --help |
-| [`scripts/world_binding.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/scripts/world_binding.py) | World binding | see script --help |
+| [`scripts/control_loop.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/scripts/control_loop.py) | Name-addressed state builders and joint-target application | inspect source before use |
+| [`scripts/cumotion_setup.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/scripts/cumotion_setup.py) | Supported-robot controller construction | inspect source before use |
+| [`scripts/frames_and_grasping.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/scripts/frames_and_grasping.py) | Tool/contact offset conversion | inspect source before use |
+| [`scripts/inspect_scene.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/scripts/inspect_scene.py) | Robot, frame, obstacle, and optional cuMotion inspection | inspect source before use |
+| [`scripts/phase_machine.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/scripts/phase_machine.py) | Reusable manipulation phase labels | inspect source before use |
+| [`scripts/world_binding.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/scripts/world_binding.py) | Obstacle discovery and per-frame synchronization | inspect source before use |
 
-## Scope Rules
+## Execution
 
-- Use current experimental Isaac Sim APIs. Do not add Cortex, deprecated
-  manipulator, or legacy `omni.isaac.*` compatibility unless the user asks for
-  migration. `RobotState` and the world-binding substrate live in
-  `isaacsim.robot_motion.experimental.motion_generation`; the non-experimental
-  `isaacsim.robot_motion.motion_generation` is deprecated (still shipped under
-  `extsDeprecated`, not removed).
-- Prefer interactive-session iteration (Jupyter kernel in the Antioch session;
-  see [agentic-simulation](../../agentic-simulation/SKILL.md)). A standalone
-  script or managed scenario can be the deliverable shape, but validate the
-  scene logic, frame alignment, and phase gates interactively first.
-- Do not trust shell exit code alone. Inspect stdout/logs for tracebacks,
-  `RuntimeError`, explicit pass/fail JSON, and phase completion.
-- Keep one-off probes in `/tmp`. Only keep reusable, domain-specific helpers
-  in the project.
-- Scripts and scenarios run in the remote service; there is no local window.
-  Gate frame capture / video encoding behind explicit opt-in flags (for
-  example `--render OUTPUT.MP4`), and never capture frames or encode a video
-  unless asked.
+Use `isaacsim.robot_motion.experimental.motion_generation` for the current
+`RobotState` and world-binding APIs. Research a controller's pinned surface
+before copying an older example. Jupyter is useful for inspecting frames and
+phase transitions, but use the execution path that fits the task. Capture
+images when needed to verify it, and keep costly video generation bounded.
+
+The non-experimental `isaacsim.robot_motion.motion_generation` is deprecated but still ships under `extsDeprecated`; use the current experimental surface for new code. Inspect the run's logs, phase completion, checks, and final measured state as well as its exit code. A process exiting cleanly does not prove that the controller reached its goal.
 
 ## Workflow
 
@@ -73,7 +56,7 @@ Shared substrate lives in sibling skills:
 5. Validate measured outputs from the actual run. For dynamic manipulation,
    use [manipulation-ik](manipulation-ik.md) and [physics-simulation](physics-simulation.md) for grasp/contact gates.
 
-## References And Helpers
+## References and helpers
 
 - [workflow](motion-generation-references-workflow.md): task architecture and phase-machine shape.
 - [world-binding](motion-generation-references-world-binding.md): obstacles and robot-root transforms
@@ -84,23 +67,13 @@ Shared substrate lives in sibling skills:
   gripper targeting.
 - [cumotion](motion-generation-references-cumotion.md): cuMotion-specific controller (`RmpFlowController`,
   supported robots, cspace params, RMPflow failure modes).
-- [`scripts/inspect_scene.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/scripts/inspect_scene.py): interactive-session scene inspection (optional cuMotion
-  probe via the `supported_robot` arg).
-- [`scripts/cumotion/standalone_demo_template.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/scripts/cumotion/standalone_demo_template.py): copy-adapt standalone cuMotion
-  scaffold.
-- [`scripts/control_loop.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/scripts/control_loop.py): name-addressed `RobotState` builders and joint-target
-  application.
-- [`scripts/world_binding.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/scripts/world_binding.py): cuMotion obstacle discovery and per-frame world sync.
-- [`scripts/cumotion_setup.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/scripts/cumotion_setup.py): supported-robot RMPflow controller construction.
-- [`scripts/frames_and_grasping.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/scripts/frames_and_grasping.py): tool/contact offset conversion helpers.
-- [`scripts/phase_machine.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/scripts/phase_machine.py): reusable manipulation phase labels.
 
-For live-session helpers (asset verification, debug views, viewport video), use the interactive workflows in [agentic-simulation](../../agentic-simulation/SKILL.md).
+For a standalone scaffold, inspect the upstream [cuMotion demo template](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/scripts/cumotion/standalone_demo_template.py). Replace its app launch with Antioch startup; keep its state and controller wiring.
 
 ## Controller wiring (quick rules)
 
-Full code in `references/world-binding.md` + `references/control-loop.md`;
-controller construction in `references/cumotion.md`. The non-negotiables:
+Use the linked world-binding, control-loop, and controller references above.
+Check these boundaries:
 
 - Build joint and site state by name, not by index assumptions
   (`robot.dof_names`, the controller's reported tool/site frames).
@@ -136,7 +109,7 @@ root transforms as the success path for a physics run.
 ## Frame Discipline
 
 Most failures are frame errors. Log these separately (see
-`references/frames-and-grasping.md`):
+[frames and grasping](motion-generation-references-frames-and-grasping.md)):
 
 - controller tool frame, such as `tool0` or `wrist_3_link`
 - desired and measured tool local `+Z` axis
@@ -158,13 +131,15 @@ controller gains or timeouts.
 
 ## Canonical Sources
 
-Scripts (`source/standalone_examples/tutorials/manipulation/`, all use the `mg` substrate):
+Tutorials at the pinned source revision, all using the `mg` substrate:
 
-- `tutorial_9_arm_trajectory.py`, `tutorial_9_follow_target.py`
-- `tutorial_9_pick_place_cumotion.py` (cuMotion), `tutorial_9_pick_place_pink.py` (PINK)
+- [Arm trajectory](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/source/standalone_examples/tutorials/manipulation/tutorial_9_arm_trajectory.py) and [follow target](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/source/standalone_examples/tutorials/manipulation/tutorial_9_follow_target.py)
+- Pick and place with [cuMotion](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/source/standalone_examples/tutorials/manipulation/tutorial_9_pick_place_cumotion.py) or [PINK](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/source/standalone_examples/tutorials/manipulation/tutorial_9_pick_place_pink.py)
 
-Docs (general API first, then implementations):
+The public source tree has these extension overviews and API references:
 
-- `docs/isaacsim/robot_motion_experimental/index.rst`: framework overview
-- `docs/isaacsim/motion_generation/{index,scene_interaction,trajectory_planning,mobile_robot_control_example}.rst`
-- `docs/isaacsim/cumotion/index.rst`, `docs/isaacsim/pink/index.rst`
+- Experimental framework: [overview](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/source/extensions/isaacsim.robot_motion.experimental.motion_generation/docs/Overview.md) and [API reference](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/source/extensions/isaacsim.robot_motion.experimental.motion_generation/docs/api.rst)
+- [cuMotion overview](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/source/extensions/isaacsim.robot_motion.cumotion/docs/Overview.md) and [PINK overview](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/source/extensions/isaacsim.robot_motion.pink/docs/Overview.md)
+- [Motion-generation example series](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/source/examples/series/motion_generation/README.md), including [pick and place](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/source/examples/series/motion_generation/pick_place/README.md)
+
+The original skill also names `docs/isaacsim/...` pages that are absent from this public revision. Use the linked extension documentation and tutorials above rather than treating those paths as downloadable files.

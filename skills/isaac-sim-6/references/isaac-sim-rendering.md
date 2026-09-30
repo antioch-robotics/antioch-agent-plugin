@@ -2,17 +2,11 @@
 
 Adapted from NVIDIA [`isaac-sim-rendering/SKILL.md`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/isaac-sim-rendering/SKILL.md) (Apache-2.0).
 
-Read [Isaac Sim on Antioch](../SKILL.md) for startup, imports, and runtime configuration.
-Native snippets run after startup, inside project functions or an active kernel.
-Linked upstream scripts are source examples, not installed plugin commands.
-
-## Purpose
-
-Capture production-quality headless frames with RT2 or PathTracing, ACES tone mapping, warehouse lighting patterns, and quantitative validation thresholds.
+[Isaac Sim task index](../SKILL.md#domain-references) · [Antioch startup](../../antioch-platform/references/simulation-code.md)
 
 Capture pipeline, lighting recipes, ACES calibration, camera math, validation.
 
-All light intensities, filmIso values, and settle-frame counts below are scene-specific tuning starting points validated on upstream warehouse scenes, not universal values. Warm-up depends on assets, shaders, temporal accumulation, and renderer — confirm readiness with frame-content checks and a per-frame deadline; a fixed settle-frame count never proves readiness, and a dark or bright frame can be intentional.
+The lighting recipes below are examples from upstream warehouse scenes. Their values are starting points, not universal settings or measurements reproduced on Antioch. Warm-up depends on assets, shaders, temporal accumulation, and renderer — confirm readiness with frame-content checks and a per-frame deadline; a fixed settle-frame count never proves readiness, and a dark or bright frame can be intentional.
 
 ## Upstream source examples
 
@@ -40,25 +34,36 @@ In a live Jupyter kernel, use `await rep.orchestrator.step_async(...)`.
 Do not start a nested event loop or synchronous Kit update loop while an
 asynchronous capture is running. A standalone script owns its own loop.
 
+`SimulationConfig.viewport_updates` controls the default viewport: `None` follows `stream`, `True` keeps it rendering, and `False` pauses it, including the stream. Sensor and Replicator render products have their own updates. Keep pumping Kit when those products need it; pausing the default viewport is not permission to stop the application loop.
+
 **Capture method choice**:
 - `omni.replicator.core` RGB annotator -> reliable, supports any resolution.
 - `RtxCamera` + `CameraSensor` (from `isaacsim.sensors.experimental.rtx`) for tick-rate control, OpenCV / fisheye lens distortion, ISP, tiled multi-view, or stereo depth (see [isaac-camera](isaac-camera.md)).
 - Swapchain capture -> also works on Kit 110 if you explicitly set window size matching the render resolution.
 - Replicator render products may return empty arrays for Gaussian splat scenes; fall back to swapchain capture in that case.
 
-## RT2 vs PathTracing
+## Choose and tune the renderer
+
+Use RTX real-time for iterative work when it meets the task. Path tracing
+can be useful for offline fidelity comparisons; profile its convergence and
+cost on the actual scene. Startup and frame timings depend on assets,
+shaders, resolution, and hardware, not one fixed settle count.
 
 ```python
-settings.set("/rtx/rendermode", "RayTracedLighting")  # RT2 — real-time
-# settings.set("/rtx/rendermode", "PathTracing")      # offline only
+import carb
+
+settings = carb.settings.get_settings()
+settings.set("/rtx/rendermode", "RayTracedLighting")
+# For an offline path-traced comparison:
+# settings.set("/rtx/rendermode", "PathTracing")
 ```
 
-| Mode | Convergence | Per-frame time | Use for |
-|---|---|---|---|
-| **RayTracedLighting (RT2)** | ~200 settle frames (~10-15s) | 10-15s | All iterative work, warehouse scenes, training data |
-| **PathTracing** | converges over many subframes | 5-30 min | Final hero shots only, when explicitly requested |
+| Mode | Useful for | Check |
+|---|---|---|
+| RTX real-time | Iteration, live cameras, trajectory capture | Temporal artifacts, shadows, noise, frame cost |
+| Path tracing | Offline comparisons and converged images | Samples, noise, lighting convergence, total render cost |
 
-**Default to RT2.** Switch to PathTracing only after RT2 has been calibrated and the user asks for hero quality.
+Run these fragments in the initialized remote process. Choose the renderer for the requested output and measure the scene's actual cost. There is no fixed number of seconds or frames that establishes convergence.
 
 ## Headless Lighting — Add Explicit Lights
 
@@ -77,92 +82,65 @@ sun.GetIntensityAttr().Set(1500.0)
 UsdGeom.Xformable(sun.GetPrim()).AddRotateXYZOp().Set(Gf.Vec3f(-50, 20, 0))
 ```
 
-### Baseline Intensity Guide
+Tune lighting, exposure, and tone mapping together against a fresh image.
+The upstream [warehouse lighting example](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/isaac-sim-rendering/scripts/warehouse_lighting.py)
+shows one arrangement; its intensities are scene-specific. Inspect deep
+occlusion and bright open views separately rather than adding uniform fill
+until a brightness threshold passes.
 
-| Scene Type | DomeLight | DistantLight | Notes |
-|---|---|---|---|
-| Warehouse (default) | 400 | 1500 | Good general balance |
-| Close-up robot | 300 | 1200 | Slightly softer |
-| Outdoor | 500 | 2000 | Brighter sun |
-| Dark/moody | 100 | 800 | Dramatic shadows |
+## Exposure and tone mapping
 
-## ACES Tone Mapping — The Single Biggest Quality Lever
-
-ACES is one useful tone-mapping choice for indoor scenes. Tune exposure and
-lighting together against the requested appearance.
+Tune exposure with lighting rather than increasing every light until the image becomes visible. The upstream recipe uses ACES; the shipped Kit settings enumerate ACES as operator **6**, not the upstream example's 4. The white point setting is an RGB color, not a Kelvin temperature.
 
 ```python
 import carb
 
-s = carb.settings.get_settings()
-
-s.set("/rtx/post/tonemap/op", 4)  # ACES
-s.set("/rtx/post/tonemap/filmIso", 600.0)  # key parameter (see table)
-s.set("/rtx/post/tonemap/whitepoint", 6500.0)
-s.set("/rtx/post/tonemap/enabled", True)
-s.set("/rtx/post/aa/op", 3)  # TAA for RT2
+settings = carb.settings.get_settings()
+settings.set("/rtx/post/tonemap/op", 6)  # ACES at this runtime pin
+settings.set("/rtx/post/tonemap/filmIso", 200.0)
+settings.set("/rtx/post/tonemap/whitepoint", (1.0, 1.0, 1.0))
 ```
 
-### filmIso Calibration (validated on warehouse interiors)
+Film ISO, exposure time, f-number, automatic exposure, and the camera pipeline can all affect the result. Inspect their current settings before changing them. For controlled comparisons, keep exposure and tone mapping fixed across images. A camera's ISP configuration may need separate treatment; see [camera calibration and capture](isaac-camera.md).
 
-| Scene | filmIso | Notes |
-|---|---|---|
-| General warehouse RT2 | 200 | Photorealistic starting point |
-| Deep-aisle indoor (hero camera) | 600 | Best balance across hero/overview/aisle/topdown |
-| Aerial/overview-heavy | 400 | Avoid overexposure on open views |
+The upstream warehouse experiments used these film ISO starting points. Hold the rest of the camera and lighting configuration fixed when comparing them:
 
-### Anti-Recipes (don't waste time on these)
-- Wide rect lights (width=5+) → flat, no light pools
-- High dome intensity (400+) with ACES filmIso 600 → washes out shadows
-- Reinhard tonemapping → muddy, low contrast
-- PathTracing for iterative work → 5-30 min per frame, kills velocity
+| View | Upstream film ISO |
+|---|---|
+| General warehouse | 200 |
+| Deep aisle | 600 |
+| Aerial or overview | 400 |
 
 ## Warehouse lighting example
 
-`add_warehouse_lighting(stage, n_lights, settings)` — low-ambient dome + focused rect lights + optional fog. Pass `settings=carb.settings.get_settings()` to enable fog.
+The upstream [warehouse lighting helper](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/isaac-sim-rendering/scripts/warehouse_lighting.py) combines ambient light, ceiling fixtures, and optional atmosphere. Adapt its setup to the authored scene instead of treating every layer as mandatory.
 
-See [`scripts/warehouse_lighting.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/isaac-sim-rendering/scripts/warehouse_lighting.py).
+| View | Starting adjustment | Compare against |
+|---|---|---|
+| Open overview | Low ambient fill plus directional or ceiling light | Bright floors, shadow detail, clipped highlights |
+| Deep aisle | Fixtures that actually illuminate the aisle and its lower shelves | Ground-level robot cameras and occluded surfaces |
+| Object close-up | Local key and fill with enough separation from the background | Material appearance, reflections, fine geometry |
 
-For 40m warehouse: fog density 0.003 adds depth without murk.
+One upstream recipe paired **film ISO 600 and no dome light** with an 8 × 14 grid of ceiling panels: intensity 70,000, size 2.5 × 1.5 m, and warm color `(1.0, 0.97, 0.92)`. Aisle sphere lights used intensity 15,000, radius 0.1 m, and height 3.5 m. Upstream reported mean RGB values of 60–155 across its views; these measurements have not been reproduced on Antioch. Treat this as a separate recipe from the dome-plus-sun example above, and retune it for the actual scene.
 
-## Deep-Aisle Indoor Lighting
-
-### Problem
-Ground-level camera in narrow aisle = black frame (82KB / mean_RGB < 5). Ceiling rect lights at Z=10m can't illuminate a 3.5m-wide × 8m-tall aisle to ground level — RT2 struggles with deep occlusion.
-
-### Solution: Multi-Layer Lighting
 ```python
-# Layer 1: dense ceiling grid (6×12 across facility)
-# Rect lights at ceil_z-0.3, pointing down
-# intensity=200000, width=4.0, height=3.0  (wide coverage)
+from pxr import Gf, UsdGeom, UsdLux
 
-# Layer 2: low sphere lights IN each aisle at Z=3.5m (head-height)
-# Directly in camera FOV between tier 1 and ground
-for aisle_y, lx in aisle_light_positions:
-    lt = UsdLux.SphereLight.Define(stage, lp)
-    lt.GetRadiusAttr().Set(0.15)
-    lt.GetIntensityAttr().Set(100000.0)
+panel = UsdLux.RectLight.Define(stage, "/World/Lighting/CeilingPanel")
+panel.GetWidthAttr().Set(2.5)
+panel.GetHeightAttr().Set(1.5)
+panel.GetIntensityAttr().Set(70000.0)
+panel.GetColorAttr().Set(Gf.Vec3f(1.0, 0.97, 0.92))
+UsdGeom.Xformable(panel.GetPrim()).AddTranslateOp().Set(Gf.Vec3d(0, 0, 8))
 ```
 
-- The upstream example used 500 settle frames; measure readiness and convergence on the current scene.
-- Dome at 300 intensity is optional ambient fill — don't go higher or open views wash out
+This example assumes a Z-up stage in meters and a new owned light path. A rect light faces local -Z, so this panel points down. Place fixtures from the real aisle layout. Do not brighten an entire warehouse to fix one occluded camera: compare both the deep aisle and open overview after each change. Fog can help a requested visual appearance but also changes sensor imagery; do not add it to an evaluation without making it an input.
 
-### Dome vs Deep-Aisle Tension (fundamental conflict in enclosed scenes)
-- High dome → overview/topdown overexpose (mean > 220)
-- Low/no dome → deep aisle underexpose (mean < 10)
-- **Best balance**: no dome + sphere lights in aisles + 500K rect grids + 500 settle frames
-  - Hero aisle: mean ~60
-  - Overview (elevated 3/4): mean ~140-175
-  - Cross-aisle: mean ~230
+### Deep aisles and unsuccessful recipes
 
-### Validated ACES filmIso=600 Light Intensities
-- Ceiling rect lights: **70,000** intensity, 2.5×1.5m, warm white (1.0, 0.97, 0.92)
-- Aisle sphere lights: **15,000** intensity, radius=0.1, at Z=3.5m
-- Grid: 8×14 ceiling panels
-- **No dome light** — ACES handles exposure
-- Result: mean 60–155 across all view types
+In the upstream 3.5 m wide, 8 m tall aisle, ceiling lights at 10 m did not adequately illuminate the floor. Lower aisle lights and a camera at a cross-aisle junction gave a clearer view. Its experiments also found that very wide rect lights flattened the light pools, a dome at intensity 400 or above washed out shadows at film ISO 600, and Reinhard tone mapping looked muddy in that scene. Those observations are useful comparisons, not renderer-wide rules.
 
-**Camera tip**: place "hero" camera at cross-aisle intersections, not deep in narrow aisles. The junction has more open space for light to reach.
+The upstream helper used fog density 0.003 for a 40 m hall. Start there only when that atmosphere suits the task, then inspect the result. Fixed warm-up counts and reported path-tracing times also depend on the scene and hardware; use fresh frame checks and measured cost rather than treating them as guarantees.
 
 ## Frame quality validation
 
@@ -186,7 +164,7 @@ sensor. Very bright or dark images may be intentional; compare with the task.
 
 ## Look-At Camera Math
 
-For chase/POV/overview cameras pointing at a target, always use a look-at matrix. Don't hand-tune Euler angles — they're brittle and you'll waste hours on sign flips.
+For a target-facing camera, a look-at matrix avoids manual Euler-angle tuning.
 
 `look_at_matrix(eye, target, up)` — returns `Gf.Matrix4d` for a USD camera at `eye` looking at `target`. Handles degenerate up-vector (straight down/up).
 
@@ -206,11 +184,11 @@ import math
 
 behind_dir_x = -math.cos(yaw)
 behind_dir_y = -math.sin(yaw)
-right_dir_x = -math.sin(yaw)
-right_dir_y = math.cos(yaw)
+left_dir_x = -math.sin(yaw)
+left_dir_y = math.cos(yaw)
 
-cam_x = robot_x + behind_dist * behind_dir_x + side_offset * right_dir_x
-cam_y = robot_y + behind_dist * behind_dir_y + side_offset * right_dir_y
+cam_x = robot_x + behind_dist * behind_dir_x + side_offset * left_dir_x
+cam_y = robot_y + behind_dist * behind_dir_y + side_offset * left_dir_y
 cam_z = height
 ```
 
@@ -241,12 +219,11 @@ target_h = max(base_height, cam_max_height_at(cam_x, cam_y) + 1.0)
 smooth_h = smooth_h * 0.95 + target_h * 0.05  # smooth transitions
 ```
 
-## Robot XformOp Discipline
+## Preserve the robot's transforms
 
-URDF-imported robots (Spot, Carter, etc.) already have authored `translate + orient + scale` xformOps on the root prim.
-
-- Use `xf.ClearXformOpOrder(); xf.MakeMatrixXform()` on the **root prim only** for initial placement.
-- **Never** add ops to child body/link prims — physics drives those.
+For initial placement, prefer a parent wrapper over clearing the referenced
+robot's transform stack. During physics, use the articulation/controller
+API; direct root transforms are appropriate for explicitly labeled replay.
 
 ## Video Assembly
 
@@ -255,7 +232,7 @@ ffmpeg -y -framerate 30 -i frames/frame_%05d.png \
   -c:v libx264 -pix_fmt yuv420p -crf 18 output.mp4
 ```
 
-Frame numbering must be **sequential** (`frame_0000.png`, `frame_0001.png`, …) — ffmpeg skips gaps.
+Keep frame numbering sequential (`frame_00000.png`, `frame_00001.png`, …). The image-sequence reader can stop at a gap; it does not preserve missing time for you. Use capture timestamps to choose playback rate, or a timestamp-aware workflow when cadence varies.
 
 ## Session Management
 
@@ -276,8 +253,4 @@ Use an interactive kernel or a long-running scenario for this (see [agentic-simu
 4. Capture did not change physics or sensor configuration unintentionally.
 5. Video frames have ordered timestamps and complete task coverage.
 
-## Integration Points
-
-- **RECEIVES from:** [urdf-mjcf-to-usd-conversion](urdf-mjcf-to-usd-conversion.md), [usd-articulation](usd-articulation.md), [mobility-gen](mobility-gen.md), [isaac-sim-robot-navigation](isaac-sim-robot-navigation.md) — populated stages to render
-- **PRODUCES for:** [data-collection-sim](data-collection-sim.md) — validated frame sequences for SDG
-- **PRODUCES for:** [isaac-sim-validator](isaac-sim-validator.md) — outputs for final QA gate
+Continue with [data collection](data-collection-sim.md) for annotated datasets, [viewport capture](../../agentic-simulation/references/viewport.md) for quick inspection, or [scenario telemetry](../../scenario-design/references/telemetry.md) to keep rendered evidence with a run.

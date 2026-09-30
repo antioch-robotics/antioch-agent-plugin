@@ -4,9 +4,12 @@ Project guidance, research, and interactive simulation tools for agents working 
 [Antioch](https://antioch.com). The plugin helps an agent work in your existing
 project, write native Isaac code, run requested evaluations on remote compute,
 and inspect their recorded evidence. It does not install a simulator locally
-or make an untested simulation correct. Session images stay fixed: sync
-files, restart processes, and start a fresh session for image
-changes. Background work builds the same Dockerfile and runs within quotas.
+or make an untested simulation correct. Session images stay fixed: project
+files sync automatically, processes restart on request, and image changes
+need a fresh session from `antioch session new`. Submitted runs carry a
+source bundle and run on sessions Antioch starts within quotas, two at a
+time per command unless `--parallel` says otherwise, or with `--session` on
+a session of yours.
 
 ## Capabilities
 
@@ -15,9 +18,10 @@ changes. Background work builds the same Dockerfile and runs within quotas.
 | [agentic-simulation](skills/agentic-simulation/SKILL.md) | Workflow entry point: research, design, build, measure, and improve within the requested scope |
 | [antioch-platform](skills/antioch-platform/SKILL.md) | Companion programming/cloud model, projects, services, sessions, CLI/YAML, assets, scenarios, and suites |
 | [antioch-research](skills/antioch-research/SKILL.md) | Search across hosted vendor documentation and source to choose methods, connect libraries, and ground APIs |
-| `isaac-sim-6` | Isaac Sim 6.0.1 physics, USD, assets, sensors, navigation, manipulation, rendering, and datasets |
-| `isaac-lab-3` | Isaac Lab 3.0.0-beta2 environments, managers, controllers, and RL integration |
-| `scenario-design` | Cases, measured verdicts, artifacts, Rerun telemetry, and review layouts |
+| [isaac-sim-6](skills/isaac-sim-6/SKILL.md) | Isaac Sim 6.0.1 physics, USD, assets, sensors, navigation, manipulation, rendering, and datasets |
+| [isaac-lab-3](skills/isaac-lab-3/SKILL.md) | Isaac Lab 3.0.0-beta2 environments, managers, controllers, and RL integration |
+| [ros2](skills/ros2/SKILL.md) | ROS 2 against simulations, on the engine's bundled Jazzy or another distro: the Isaac bridge, sim time, tf2, QoS and discovery, Nav2, MoveIt 2, and ros2_control |
+| [scenario-design](skills/scenario-design/SKILL.md) | Cases, measured verdicts, artifacts, Rerun telemetry, and review layouts |
 
 Research exposes six tools: `research_search`, `research_artifacts`,
 `research_expand`, `research_open`, `research_grep`, and `research_versions`.
@@ -25,18 +29,21 @@ Call the version tool to see current coverage; documentation crawls and source
 pins are not interchangeable.
 
 The `antioch-jupyter` MCP server (launched by `antioch-jupyter-mcp`) exposes
-`jupyter_connect`, `jupyter_kernels`, `jupyter_execute`, `jupyter_kernel`, and
-`jupyter_disconnect`. They connect to the current project's session, list or
-select kernels, run arbitrary stateful cells, return their output and images,
-and recover an exact kernel. Execution has no implicit viewport capture.
+`jupyter_connect`, `jupyter_execute`, and `jupyter_kernel`. They connect to the
+session `jupyter_connect` names with `session`, or else your only running
+session of the current project (with several, it refuses and lists them),
+select a kernel, run stateful cells, return their output as plain text and
+images, and interrupt, restart, or stop the kernel. Each cell runs after the
+project's synced files are applied. Execution has no implicit viewport capture.
 Project files, builds, native scripts, scenarios, suites, and saved evidence
 use the existing SDK and CLI.
 
 An authoring request includes a runnable local project: environment, source,
-`antioch.yaml`, and a service image with the required runtime. Built images must
-include source; an interactive image-only service can use source sync. An existing project
-is repaired in place. Run a project Python file with `antioch run src/main.py`;
-use `antioch service exec` for arbitrary commands. A plain script needs no
+`antioch.yaml`, and a service image with the required runtime. The manifest's
+`sync` mappings deliver source; the image supplies the environment. An existing project
+is repaired in place. Run a project Python file with
+`antioch service exec -- python src/main.py`, the same command that runs
+anything else in a service. A plain script needs no
 scenario decorator, but it still needs project configuration for remote dispatch. A question alone
 does not authorize files, installs, or compute.
 
@@ -48,9 +55,9 @@ bundles no agents that run independently of your harness.
 
 Agentic simulation owns the workflow; the platform skill owns CLI/YAML and
 compute concepts. Scenario design owns Python evaluation APIs; the Isaac skills
-supply native simulator knowledge. Research connects these skills to evidence.
-Task-specific links route to the next useful skill or reference, not a required
-reading sequence through the whole library.
+supply native simulator knowledge, and the ROS 2 skill the robot stack that
+drives it. Research connects these skills to evidence.
+Task-specific links form a navigable reference graph. Each entrypoint routes to detailed guides; those guides link back to their owner and across to the next task. For example, an agent can move from asset discovery to USD placement, robot control, scenario checks, and recorded telemetry without reading unrelated material. CLI operations and the public Python client share the platform guides; the client guide explains automation and recovery rather than duplicating shell commands.
 
 Isaac Sim references preserve NVIDIA's domain guidance, examples, and topic
 structure with a small Antioch adaptation layer: remote execution, startup,
@@ -70,15 +77,14 @@ in your project's Python 3.12 virtual environment, then activate it and sign in.
 From the project directory, preview and apply plugin setup:
 
 ```bash
-antioch setup --python .venv/bin/python --dry-run
-antioch setup --python .venv/bin/python
+antioch setup --dry-run
+antioch setup
 ```
 
-On Windows, use `--python .venv\Scripts\python.exe`. Without `--python`, setup
-uses the active virtual environment, or the project's `.venv` if none is active.
-It installs the current SDK and matching plugin for every Codex or Claude Code
-client on PATH, then checks your sign-in and Research connection. If a check
-fails, follow the reported next step. Setup does not sign you in or start compute.
+Setup installs the deployment's plugin for every Codex or Claude Code client
+on PATH, then checks your sign-in and Research connection. If a check fails,
+follow the reported next step. Setup does not install or upgrade the SDK, sign
+you in, or start compute.
 
 Launch your agent from the activated environment so it can find `antioch`,
 `antioch-research-mcp`, and `antioch-jupyter-mcp`. Restart an already-running
@@ -105,15 +111,9 @@ and to keep failed samples as diagnostic evidence.
 
 ## Updates and removal
 
-From the activated project environment, run `antioch setup --dry-run` to preview
-an SDK and plugin update, then `antioch setup` to apply it.
-
-Setup changes installed packages without editing the project's dependency files
-or engine images. Use `antioch project update --dry-run`, then
-`antioch project update`, to update the dependency, lockfile, environment, and
-engine image tags together. Changed Dockerfiles are built unless you pass
-`--no-build`. Existing sessions keep their current images; start a new session
-when you are ready to use the update.
+Run `antioch setup --dry-run` to preview a plugin update, then
+`antioch setup` to apply it. Upgrade the SDK and engine image yourself as
+described in [Upgrade the SDK](https://console.preview.antioch.com/docs/quickstart/install-the-sdk#upgrade-the-sdk).
 
 To remove this plugin, use `claude plugin uninstall antioch@antioch` or
 `codex plugin remove antioch@antioch`. Remove its marketplace only if no

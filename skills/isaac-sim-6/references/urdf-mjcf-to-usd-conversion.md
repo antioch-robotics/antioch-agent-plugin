@@ -2,17 +2,11 @@
 
 Adapted from NVIDIA [`urdf-mjcf-to-usd-conversion/SKILL.md`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/urdf-mjcf-to-usd-conversion/SKILL.md) (Apache-2.0).
 
-Read [Isaac Sim on Antioch](../SKILL.md) for startup, imports, and runtime configuration.
-Native snippets run after startup, inside project functions or an active kernel.
-Linked upstream scripts are source examples, not installed plugin commands.
-
-## Purpose
-
-Import URDF and MJCF robot descriptions to USD with modern importer APIs, instanceable meshes, and drive configuration for RL or teleop.
+[Isaac Sim task index](../SKILL.md#domain-references) · [Antioch startup](../../antioch-platform/references/simulation-code.md)
 
 Enable `isaacsim.asset.importer.urdf`, `isaacsim.asset.importer.mjcf`, and/or `isaacsim.asset.exporter.urdf` through `SimulationConfig.extensions` before import; installed is not enabled. A Python module path is not always the extension ID.
 
-See also [assets.md](usd-pipeline.md), [usd-articulation.md](usd-articulation.md), [usd-composition-architecture.md](usd-composition-architecture.md).
+See also [USD asset pipeline](usd-pipeline.md), [usd-articulation.md](usd-articulation.md), [usd-composition-architecture.md](usd-composition-architecture.md).
 
 Two conversion paths and one export path.
 
@@ -28,7 +22,7 @@ Two conversion paths and one export path.
 |---|---|
 | [`scripts/urdf_importer_ros.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/urdf-mjcf-to-usd-conversion/scripts/urdf_importer_ros.py) | Import URDF from a live ROS 2 `robot_state_publisher` via `URDFImporter` |
 
-Not a bundled command. ROS 2 runtime and workspace sourcing belong to [antioch-platform](../../antioch-platform/SKILL.md); enable `isaacsim.ros2.urdf` / `isaacsim.ros2.bridge` through `SimulationConfig.extensions`.
+Not a bundled command. ROS 2 runtime and workspace sourcing belong to [ros2](../../ros2/SKILL.md); enable `isaacsim.ros2.urdf` / `isaacsim.ros2.bridge` through `SimulationConfig.extensions`.
 
 ## XACRO inputs
 
@@ -50,7 +44,7 @@ Requires the `isaacsim.ros2.urdf` extension (depends on `isaacsim.ros2.bridge` f
 
 ### Fallback — offline xacro CLI
 
-`URDFImporter` does not parse XACRO. Expand to a static `.urdf` first (the `xacro` CLI, or a launch-file node that already expands it). ROS workspace sourcing and `package://` resolution belong to [antioch-platform](../../antioch-platform/SKILL.md); do not `pip install` or `apt install` on this workstation.
+`URDFImporter` does not parse XACRO. Expand to a static `.urdf` first (the `xacro` CLI, or a launch-file node that already expands it). ROS workspace sourcing and `package://` resolution belong to [ros2](../../ros2/SKILL.md); do not `pip install` or `apt install` on this workstation.
 
 ```bash
 xacro robot.xacro > robot.urdf
@@ -76,7 +70,7 @@ config = URDFImporterConfig(
     joint_drive_type="force",
     joint_target_type="position",
     override_joint_stiffness=800.0,  # example Nm/rad; retune
-    override_joint_damping=40.0,  # example
+    override_joint_damping=40.0,  # example Nm*s/rad; retune
     robot_type="Manipulator",  # robot-schema token
     run_asset_transformer=True,  # default True; applies transformer profile
     run_multi_physics_conversion=True,  # URDF -> PhysX/MuJoCo physics
@@ -94,7 +88,7 @@ output_usd = URDFImporter(config).import_urdf()
 | `debug_mode` | `False` | extra logging + intermediates |
 | `collision_from_visuals` | `False` | derive collision geom from visuals |
 | `collision_type` | `"Convex Hull"` | `Convex Hull` / `Convex Decomposition` / `Bounding Sphere` / `Bounding Cube` |
-| `allow_self_collision` | `False` | leave off for training |
+| `allow_self_collision` | `False` | enable when required by the physical task |
 | `ros_package_paths` | `[]` | resolve `package://` URLs |
 | `robot_type` | `"Default"` | robot-schema token; see below |
 | `fix_base` | `None` | `True`: add world→root fixed joint and relocate `ArticulationRootAPI`. `False`: floating-base (remove world→root fixed joint). `None`: leave source authoring |
@@ -105,6 +99,8 @@ output_usd = URDFImporter(config).import_urdf()
 | `override_joint_damping` | `None` | Nm*s/rad / N*s/m; or per-joint dict |
 | `run_asset_transformer` | `True` | run transformer profile post-import |
 | `run_multi_physics_conversion` | `True` | URDF -> PhysX joint attr conversion |
+
+For revolute joints, the importer converts these per-radian gains to USD's per-degree gains by multiplying by `pi / 180`. Direct `UsdPhysics.DriveAPI` writes need the converted values; see [joint drives](physics-simulation.md#part-4-joint-drives).
 
 ### CLI example (native Isaac Sim tree)
 
@@ -209,7 +205,7 @@ Run the Lab converters through the isaac-lab-3 skill / Lab Python environment in
 
 ### `make_instanceable: true`
 
-GPU mesh instancing. Without it, 4096 envs * full mesh = VRAM blow-up. With it, parallel envs share one mesh in VRAM. Always set for RL.
+Mesh instancing reduces duplicated geometry in parallel environments. Use it when compatible with the required per-instance edits, then measure memory use.
 
 ### `fix_base` by robot type
 
@@ -244,10 +240,10 @@ Standalone example (not a bundled command): `source/standalone_examples/api/isaa
 | OOM during training | `make_instanceable: false` | set `true` |
 | Robot flies apart | `merge_fixed_joints: false` + stiff PD | set true or reduce gains |
 | Wrong masses | `import_inertia_tensor: false` + bad geometry | set `true` |
-| Self-collision slowdown | `self_collision: true` during training | set `false` |
+| Self-collision slowdown | Many interacting collider pairs | Inspect collision filtering without removing contacts required by the task |
 | XACRO not converting | `URDFImporter` core does not parse XACRO | import from a running node via `isaacsim.ros2.urdf` (`RobotDefinitionReader` / `File -> Import from ROS2 URDF Node`), or pre-expand offline with `xacro robot.xacro > robot.urdf` |
 | `package://` URLs unresolved | missing mapping | pass `ros_package_paths=[{"name":..., "path":...}]` or `--ros-package NAME:PATH` |
 | MJCF actuators behave wrong | gain/bias type left at MJCF default | set `override_gain_type` / `override_bias_type` / `override_gain_prm` / `override_bias_prm` |
-| Transformer output ignored | running an old test asset | delete `usd_path` and re-import with `run_asset_transformer=True` |
+| Transformer output ignored | Loading a different or stale output | Verify the loaded path and re-import to a fresh output directory |
 
 Importer/exporter extensions are also published as standalone pip wheels for non-Kit consumers (`isaacsim-asset-importer-urdf`, `isaacsim-asset-importer-mjcf`, `isaacsim-asset-exporter-urdf`, `isaacsim-asset-transformer`). Do not build wheels with `./repo.sh` on this workstation; use the remote image's installed extensions.

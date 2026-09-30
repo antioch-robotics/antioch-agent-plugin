@@ -2,15 +2,9 @@
 
 Adapted from NVIDIA [`usd-pipeline/SKILL.md`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/usd-pipeline/SKILL.md) (Apache-2.0).
 
-Read [Isaac Sim on Antioch](../SKILL.md) for startup, imports, and runtime configuration.
-Native snippets run after startup, inside project functions or an active kernel.
-Linked upstream scripts are source examples, not installed plugin commands.
+[Isaac Sim task index](../SKILL.md#domain-references) · [Antioch startup](../../antioch-platform/references/simulation-code.md)
 
-## Purpose
-
-Discover assets, measure bounds and shaders, swap placeholders, correct offsets, and validate shader compatibility before rendering.
-
-See also [usd.md](usd-composition-architecture.md), [usd-composition-architecture.md](usd-composition-architecture.md), [spatial-reasoning.md](spatial-reasoning.md).
+See also [usd-composition-architecture.md](usd-composition-architecture.md) and [spatial-reasoning.md](spatial-reasoning.md).
 
 ## Upstream helpers (source examples)
 
@@ -34,24 +28,24 @@ Not bundled commands.
 
 ### The Placeholder-to-Asset Pipeline
 
-Real-world USD scene building follows this pattern:
+Use this progression when replacing a rough layout with reusable USD assets:
 
 1. **Prototype with cubes** — Layout spatial zones using colored UsdGeom.Cube meshes
 2. **Catalog assets** — Measure every candidate USD asset (bbox, shaders, prim count)
 3. **Map blocks to assets** — Match placeholder types to appropriately-sized real assets
 4. **Place with offset correction** — Reference assets at block positions, correcting for asset bbox center offset
-5. **Validate renders** — Vision model + domain expert scoring
+5. **Validate the scene** — Check bounds, clearances, materials, and fresh renders against the task
 6. **Iterate** — Fix overshoot, corridor intrusion, scale mismatches
 
 ### Why Bbox Offset Correction Matters
 
-Most USD assets are NOT centered at origin. A rack asset might have its bbox center at `(46.7, 104.6, 4.5)` — if you place it at the target position `(112.0, 20.0, 0.0)` without correction, it lands 46.7m east and 104.6m north of where you want it.
+An asset origin may be far from its geometry. A rack asset might have its bbox center at `(46.7, 104.6, 4.5)` — if you place it at the target position `(112.0, 20.0, 0.0)` without correction, it lands 46.7m east and 104.6m north of where you want it.
 
 **Unrotated formula:**
 ```
 translate_x = target_x - asset_bbox_center_x
 translate_y = target_y - asset_bbox_center_y
-translate_z = -asset_bbox_min_z  (puts asset base on ground plane)
+translate_z = support_z - asset_bbox_min_z
 ```
 
 After rotation or nonuniform scale, transform all eight bbox corners rather than subtracting an unrotated center. USD references do not convert units or axes. For an unscaled asset:
@@ -72,33 +66,30 @@ See [`scripts/measure_asset.py`](https://github.com/isaac-sim/IsaacSim/blob/7c20
 
 ### Key Learnings
 
-- **Use `Usd.Stage.Open()` not `Sdf.Layer.FindOrOpen()`** — Sdf fails silently on binary .usd crate files, returns default mpu=1.0
+- **Use `Usd.Stage.Open()` for composed measurements.** Sdf supports binary crate layers, but a layer alone does not compose referenced geometry.
 - **Always check mpu** — Some assets use cm (mpu=0.01), some use meters (mpu=1.0). Scale measurements accordingly.
-- **Invalid bbox (min > 1e30)** means the asset didn't compose — usually missing references or payloads
+- **Empty or nonfinite bounds** need investigation. Check missing references, unloaded payloads, selected purposes, and whether the prim has bounded geometry.
 - **Offline `Usd.Stage.Open`** is enough for many measurements; a Kit process is not required just to read metersPerUnit.
-- **For bbox of composed references in a live stage**, define a temp prim with a reference, step the app a few times so composition resolves, then compute bbox. A fixed frame count does not prove readiness — check that the bound is finite and not the empty/infinity sentinel (`min > 1e30`).
+- **For bounds in a live stage**, measure a temporary reference you own, then remove it. Rebuild caches after edits and validate the composed bounds. Do not advance an unrelated simulation just to inspect an asset.
 
 ## Phase 2: Shader Compatibility Check
 
-### The MDL problem without a GUI viewport
+### Renderer compatibility
 
-| Shader Type | Remote/headless RTX | Isaac Sim GUI | OVRTX |
-|---|---|---|---|
-| UsdPreviewSurface only | renders | renders | renders |
-| MDL + UsdPreviewSurface (dual) | may fall back to Preview | uses MDL | uses MDL |
-| MDL only (sourceAsset) | can be **black** | renders | renders |
-| No materials | grey/invisible | grey | grey |
+RTX supports MDL in headless sessions. A missing UsdPreviewSurface fallback does not make an asset unusable. Check what the target renderer supports and whether material dependencies resolve there:
 
-**Rule:** For pipelines without GUI look-dev, prefer assets with UsdPreviewSurface fallback (dual-shader) or native UsdPreviewSurface. RTX supports MDL, but material bindings, asset resolution, shader logs, lights, camera, and renderer still need a real frame check. Flattening composition does not embed external textures.
+| Material | Inspect |
+|---|---|
+| UsdPreviewSurface | Shader inputs, textures, UVs, and material bindings |
+| MDL | MDL module resolution, subidentifier, textures, bindings, and shader compilation logs |
+| Multiple render contexts | Which shader output the renderer selects; a fallback's presence does not prove it is bound |
+| No material | Whether a plain surface is intended or a binding is missing |
 
-Do not start a local Xvfb, `isaac-sim.sh`, or `SimulationApp`. Antioch runs the remote simulator; add explicit lights when capturing (GUI viewport lights are not present).
+Upstream reported black MDL-only assets in its headless ARM64 setup. Keep that symptom in the diagnosis, but do not generalize it into a headless MDL ban: inspect module resolution, compilation logs, bindings, and the target renderer.
 
-### Identifying dual-shader assets
+A fallback can improve portability across renderers. `info:id = "UsdPreviewSurface"` identifies a shader, and `info:mdl:sourceAsset` identifies an MDL source asset; neither alone proves that the rendered object uses it. Inspect a fresh image with the intended camera and lighting. Flattening composition does not embed external textures.
 
-Look for these patterns in USD:
-- `info:id = "UsdPreviewSurface"` on any Shader prim → headless-safe
-- `info:mdl:sourceAsset` without UsdPreviewSurface sibling → MDL-only, headless-unsafe
-- Some processed catalog assets are MDL-only; collected dual-shader variants are safer for non-GUI capture. Inspect the actual USD rather than trusting a vendor nickname.
+Use [Antioch startup](../../antioch-platform/references/simulation-code.md), then the [rendering guide](isaac-sim-rendering.md) for capture and lighting. Do not start a second `SimulationApp` or a local simulator.
 
 ## Phase 3: Placeholder-to-Asset Mapping
 
@@ -108,7 +99,7 @@ Look for these patterns in USD:
 2. For each prefix, find the best-fit asset by:
    - Similar function (racks→rack assets, conveyors→conveyor assets)
    - Compatible size (asset shouldn't massively overshoot the placeholder zone)
-   - Dual-shader compatibility (headless rendering requirement)
+   - Materials supported by the target renderer with resolvable dependencies
 3. Document the mapping table before building
 
 ### Mapping Table Format
@@ -122,9 +113,9 @@ Look for these patterns in USD:
 
 ### Size Philosophy
 
-**Use natural asset sizes, NOT scaled-to-cube.** Scaling assets to match cube dimensions destroys visual density and realism. Place at the block's XY position with the asset's natural dimensions.
+Prefer assets whose natural dimensions fit the task. Scaling can be valid when the model calls for it, but changes collision geometry and may require new mass and inertia. Do not stretch a robot or mechanism merely to fill a proxy.
 
-Exception: If an asset is dramatically larger than its zone (e.g., 83m assembly in a 20m zone), use smaller modular pieces instead.
+If an asset is dramatically larger than its zone (e.g., 83m assembly in a 20m zone), use smaller modular pieces instead.
 
 ## Phase 4: Placement Script Pattern
 
@@ -133,6 +124,8 @@ Exception: If an asset is dramatically larger than its zone (e.g., 83m assembly 
 `get_asset_bbox(stage, asset_path, app)` — reference asset temporarily to get accurate bbox center. `collect_blocks(stage)` — group visible Cube prims by name prefix with world positions. `place_assets(stage, blocks, asset_map, asset_bboxes, module_name)` — place assets at block positions with bbox-center offset correction; hides original cubes.
 
 See [`scripts/place_assets.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/usd-pipeline/scripts/place_assets.py).
+
+The upstream `get_asset_bbox(..., app)` helper calls `app.update()`. On a playing timeline this can advance the simulation. For measurement alone, open a separate composed USD stage or adapt the helper to avoid stepping an unrelated running scene.
 
 ### Hierarchy Convention
 
@@ -171,10 +164,9 @@ See [`scripts/articulation_builder.py`](https://github.com/isaac-sim/IsaacSim/bl
 ### UV Mapping & Materials
 
 For textures:
-- Use `sphereUV` mapping for global assets
-- Use `linear` for flat planes (floors, walls)
-- Always use `UsdPreviewSurface` as fallback
-- Never use MDL-only materials for headless
+- Preserve valid authored UVs. Choose a mapping that fits the geometry; check seams, tiling, scale, and orientation.
+- Provide a `UsdPreviewSurface` fallback when the asset must work in renderers that need it
+- Verify the actual material in the target renderer, including headless RTX
 
 ## Phase 6: Validation
 
@@ -185,30 +177,24 @@ For textures:
 | Yellow | (1.0, 1.0, 0.2) | Warning (near overlap)
 | Green | (0.2, 1.0, 0.2) | Valid, ready to replace with asset
 
-### Format Validation Checklist
-- [ ] All assets have `.usd`, `.usda`, or `.usdc` extension
-- [ ] All paths use forward slashes `/`
-- [ ] No `..` relative paths
-- [ ] Stage and asset `metersPerUnit` recorded; scale applied once (`asset_mpu / stage_mpu`)
-- [ ] No `./` or `../` syntax in references
-- [ ] Topology: artifacts must not be nested under `Xform` if empty
+### Packaging and validation
 
-### Asset Recommendation (Based on Scan)
+- Check the default prim, units, up-axis, references, payloads, variants, textures, and material bindings.
+- Preserve valid relative paths such as `../materials/paint.usda` within the delivered package. Do not prohibit relative references or assume flattening embeds their dependencies.
+- Validate transformed bounds and clearances after replacing proxies. Keep visual inspection separate from physics contact checks.
+- Reopen the package from the destination layout so references cannot succeed only through files left in the source checkout.
+- Use [asset upload and download](../../antioch-platform/references/assets.md) to publish and verify the complete asset package.
 
-First, scan all assets with `catalog_assets()`, then:
+### Choosing candidates
 
-- Filter: `dual_shader` is True
-- Sort: `prims < 5000`
-- Assign: Match bbox dimensions within 20% tolerance of placeholder cube
-- Reject: catalog entries that are placeholder stacks rather than real assets (inspect the USD)
+Catalog the library before choosing replacements. Match function, dimensions, collision detail, articulation requirements, materials, and rendering cost. A prim-count threshold or fixed size tolerance cannot decide every task. Inspect whether a catalog entry is a finished asset, a proxy, a single module, or an entire assembly.
 
-## Hard-Won Lessons
+## Common failures
 
-1. **Never scale assets to match cube dimensions** — destroys visual density. Use natural sizes.
-2. **Large assemblies (>20m) rarely fit block clusters** — use smaller modular pieces instead.
-3. **Always correct for bbox center offset** — most assets aren't origin-centered.
-4. **MDL-only materials can render black** without GUI look-dev. Prefer dual-shader / UsdPreviewSurface fallback. Named catalog assets (totes, pallet piles, tables) must be inspected, not assumed.
-5. **Do not kill Kit processes, clean `/dev/shm/carb-*`, or relaunch locally.** Antioch owns the remote simulator process.
-6. **Remote/headless capture requires explicit DomeLight + DistantLight** — a GUI viewport adds lights automatically; the remote session does not.
-7. Viewport capture (`antioch.capture_viewport` / `capture_viewport_to_file`) is not a sensor camera or Replicator product. See [rendering.md](isaac-sim-rendering.md) / [sensors.md](isaac-sim-sensor.md).
-8. File-size heuristics (KB/MB) are not quality oracles. Inspect the decoded frame.
+1. An origin offset places otherwise correctly sized geometry outside its zone. Check the transformed bounds, not just the prim position.
+2. A whole assembly replaces one module. Inspect child prims or choose a smaller reference.
+3. A second unit conversion makes an asset 100 times too small. Record stage and source units and apply their ratio once.
+4. A black render can come from framing, missing lights, unresolved material dependencies, or an unready capture. Inspect the decoded frame and logs.
+5. Replacing a transform stack removes authored scale or orientation. Put layout placement on a wrapper when possible.
+6. Baked animation is useful for replay, but does not demonstrate physical navigation or manipulation. For physical robots, continue with [articulations](usd-articulation.md), [navigation](navigation-primitives.md), or [manipulation](manipulation-ik.md).
+7. Viewport capture, a sensor camera, and a Replicator render product have different purposes. See [rendering](isaac-sim-rendering.md) and [sensors](isaac-sim-sensor.md).

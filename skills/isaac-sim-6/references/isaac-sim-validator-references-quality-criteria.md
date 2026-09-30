@@ -2,6 +2,8 @@
 
 Adapted from NVIDIA [`isaac-sim-validator/references/quality-criteria.md`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/isaac-sim-validator/references/quality-criteria.md) (Apache-2.0).
 
+[Isaac Sim task index](../SKILL.md#domain-references) · [Antioch startup](../../antioch-platform/references/simulation-code.md)
+
 Select criteria before the run. The [validation workflow](isaac-sim-validator.md)
 explains the evidence levels; [scenario design](../../scenario-design/SKILL.md)
 records measured verdicts. These are review categories, not fixed thresholds.

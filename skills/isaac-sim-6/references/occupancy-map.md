@@ -2,13 +2,7 @@
 
 Adapted from NVIDIA [`occupancy-map/SKILL.md`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/occupancy-map/SKILL.md) (Apache-2.0).
 
-Read [Isaac Sim on Antioch](../SKILL.md) for startup, imports, and runtime configuration.
-Native snippets run after startup, inside project functions or an active kernel.
-Linked upstream scripts are source examples, not installed plugin commands.
-
-## Purpose
-
-Export ROS-compatible occupancy grids from USD scenes via the omap extension or a USD-projection fallback for Nav2, MobilityGen, and A* planners.
+[Isaac Sim task index](../SKILL.md#domain-references) · [Antioch startup](../../antioch-platform/references/simulation-code.md)
 
 A USD bounding-box projection is only an approximation and can miss descendants or overfill hollow geometry. Grid occupancy is not physical contact. Validate a projection with an asymmetric fixture before treating it as a collision-free map.
 

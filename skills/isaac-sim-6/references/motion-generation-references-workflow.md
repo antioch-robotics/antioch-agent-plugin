@@ -2,19 +2,14 @@
 
 Adapted from NVIDIA [`motion-generation/references/workflow.md`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/references/workflow.md) (Apache-2.0).
 
-Read [Isaac Sim on Antioch](../SKILL.md) for startup, imports, and runtime configuration.
-Native snippets run after startup, inside project functions or an active kernel.
-Linked upstream scripts are source examples, not installed plugin commands.
+[Isaac Sim task index](../SKILL.md#domain-references) · [Antioch startup](../../antioch-platform/references/simulation-code.md)
 
-Use this sequence for new motion-generation demos. It assumes the generic
-interactive-session, rendering, physics, and manipulation validation rules are
-loaded from the sibling skills listed in [Isaac Sim on Antioch](../SKILL.md). The controller is
-pluggable; for the cuMotion `RmpFlowController` specifics see
-[cumotion](motion-generation-references-cumotion.md).
+Use the steps needed for the requested motion experiment. For cuMotion
+controller details, load [cuMotion](motion-generation-references-cumotion.md).
 
 ## Runtime choice
 
-- **Interactive session**: default for iteration, stage inspection, marker
+- **Live kernel**: default for iteration, stage inspection, marker
   placement, screenshots, and validation probes (Jupyter kernel in the Antioch
   session; see [agentic-simulation](../../agentic-simulation/SKILL.md)).
 - **Standalone script / scenario**: deliverable shape when the demo must own
@@ -51,7 +46,7 @@ pluggable; for the cuMotion `RmpFlowController` specifics see
 10. Reset the controller at discontinuous target jumps.
 11. Validate gates in order with [manipulation-ik](manipulation-ik.md): pick-up/hold,
     manipulate/flip, and place/release. Do not continue after a failed gate.
-12. Capture visual evidence from the latest run with the interactive-session
+12. Capture visual evidence from the latest run with the live-kernel
     helpers (see [agentic-simulation](../../agentic-simulation/SKILL.md)).
 13. Keep reusable corrections with the project before delivery.
 
@@ -72,7 +67,7 @@ Use [`scripts/cumotion/standalone_demo_template.py`](https://github.com/isaac-si
 as a starting point for standalone demos. It owns simulation startup and
 the required post-startup imports.
 
-Do not copy standalone startup calls into interactive-session probes. In
+Do not copy standalone startup calls into live-kernel probes. In
 particular, `SimulationManager.setup_simulation(...)` belongs in scripts that
 own startup. In a running session, stop/play with `app_utils`, reset or
 recreate the stage, and step with `await app_utils.update_app_async()`.
@@ -82,7 +77,7 @@ recreate the stage, and step with `await app_utils.update_app_async()`.
 - The phase machine reaches a terminal phase without unhandled exceptions.
 - Motion phases complete by measured convergence, not by motion timeouts.
 - Gate validation passes in order and includes object-state evidence.
-- The latest run has fresh visual evidence from the interactive session.
+- Visual claims have fresh images from the tested execution.
 - The result uses the requested physical interaction model. If the task is
   contact-only, no pose assist, hidden constraints, or direct object pose writes
   are used as the success path.

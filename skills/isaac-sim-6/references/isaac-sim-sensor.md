@@ -2,13 +2,7 @@
 
 Adapted from NVIDIA [`isaac-sim-sensor/SKILL.md`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/isaac-sim-sensor/SKILL.md) (Apache-2.0).
 
-Read [Isaac Sim on Antioch](../SKILL.md) for startup, imports, and runtime configuration.
-Native snippets run after startup, inside project functions or an active kernel.
-Linked upstream scripts are source examples, not installed plugin commands.
-
-## Purpose
-
-Simulate RTX cameras, LiDAR, radar, acoustic, and physics sensors with Replicator and the experimental sensor APIs, including vendor configs and mount attachment.
+[Isaac Sim task index](../SKILL.md#domain-references) · [Antioch startup](../../antioch-platform/references/simulation-code.md)
 
 Cameras (RGB/depth/seg/bbox), lidar/radar/acoustic, IMU/contact/effort, and Replicator domain randomization. Targets Isaac Sim 6 / Kit 110.
 
@@ -155,7 +149,9 @@ sensor.attach_writer("draw-point-cloud", size=0.05, color=[0, 1, 0.5, 1.0])
 
 GMO decode helpers in `isaacsim.sensors.experimental.rtx`: `parse_generic_model_output_data`, `parse_stable_id_map_data`, `parse_object_ids`, `draw_annotator_data_to_image`.
 
-For ROS 2 publishing of lidar scans, use the Isaac Sim ROS 2 bridge omni-graph nodes (`ROS2PublishLaserScan`, `ROS2PublishPointCloud`); enable the bridge extension via `SimulationConfig.extensions`.
+`Example_Rotary` emits spherical coordinates: its `gmo.x`, `gmo.y`, and `gmo.z` are azimuth, elevation, and range until `omni:sensor:Core:elementsCoordsType` is set to `CARTESIAN`. Read that attribute before treating GMO fields as positions.
+
+For ROS 2 publishing of lidar scans, use the Isaac Sim ROS 2 bridge omni-graph nodes (`ROS2RtxLidarHelper`, `ROS2PublishLaserScan`, `ROS2PublishPointCloud`); enable the bridge extension via `SimulationConfig.extensions`. See the [ROS 2 bridge guide](../../ros2/references/isaac-ros2-bridge.md).
 
 ## 3. Radar (RTX)
 
@@ -205,6 +201,7 @@ read. Filter sizes are sample counts; IMU has no `tick_rate` or annotator list.
 
 ```python
 from isaacsim.sensors.experimental.physics import Contact, ContactSensor
+import isaacsim.core.experimental.utils.app as app_utils
 
 contact = Contact.create(
     path="/World/Robot/foot/contact",
@@ -213,6 +210,8 @@ contact = Contact.create(
     radius=-1,  # -1 = collision shape
 )
 sensor = ContactSensor(contact)
+app_utils.play(commit=True)
+# Step the owning framework before reading, and validate is_valid and time.
 frame = sensor.get_data()
 ```
 
@@ -253,6 +252,8 @@ with rep.new_layer():
 
 rep.orchestrator.run()
 ```
+
+If a Replicator capture loop waits on the default viewport without a livestream, start with `SimulationConfig(viewport_updates=True)` and continue updating Kit. Sensor render products are separate from the default viewport; pausing that viewport does not disable them. See [headless rendering](isaac-sim-rendering.md).
 
 For pre-built randomization behaviors (scatter, jitter, environment swap), look at `isaacsim.replicator.experimental.domain_randomization` and the `isaacsim.replicator.examples` standalone examples.
 

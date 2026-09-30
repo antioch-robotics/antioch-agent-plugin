@@ -1,95 +1,59 @@
 ---
 name: agentic-simulation
-version: "1.2.5"
-description: The workflow entry point for agents using Antioch to research, design, build, inspect, test, and improve simulations. Use for Antioch simulation questions and development, custom kernels and solver integration, parameter fitting, datasets, policy experiments, failure diagnosis, and saved-run analysis. Connects research, native Python, CLI, Jupyter, assets, scenarios, and suites in a measured engineering loop scoped to the request. Load antioch-platform alongside it for the programming/cloud model, core concepts, and CLI/YAML workflows.
+version: "1.3.7"
+description: Use when researching, developing, inspecting, testing, or improving simulations with Antioch, including controllers, custom kernels, solver integration, parameter fitting, datasets, policy experiments, and failure analysis. Choose a bounded research, Jupyter, script, or recorded evaluation loop and verify it with measurements and images.
 ---
 
 # Agentic simulation
 
-Help the user turn a robotics or simulation question into grounded knowledge,
-working code, or a measured result. Antioch connects research, user-owned Python,
-remote GPU execution, and recorded evidence. Load
-[Antioch platform](../antioch-platform/SKILL.md) for its programming/cloud model,
-projects, services, sessions, scenarios, and suites.
+Turn a simulation question into grounded knowledge, working code, or a
+measured result. Scale the work to the request: an answer needs no project,
+and a small script need not become a suite. Use [Antioch platform](../antioch-platform/SKILL.md)
+for project and compute setup.
 
-Scale the work to the request. A question can end with a researched answer;
-a small script need not become a suite or training project. Editing, dispatch,
-data collection, and publishing must stay within the user's authorized scope.
-
-## The development loop
-
-Use only the steps needed for the request; research alone needs no project or compute.
-
-1. **Define the result.** Identify the requested behavior and how to measure
-   it: images for appearance, live state and contacts for physical behavior,
-   repeated cases for reliability.
-2. **Prepare.** Find or complete the owning project. Use
-   [research](../antioch-research/SKILL.md) to choose methods and resolve
-   interfaces across libraries. Load [Isaac Sim](../isaac-sim-6/SKILL.md) or
-   [Isaac Lab](../isaac-lab-3/SKILL.md) for the selected runtime, and check
-   [existing assets](../antioch-platform/references/assets.md). Implement the
-   smallest useful change.
-3. **Run a bounded experiment.** Choose the mechanism below. Record the
-   source, inputs, and execution identity needed to interpret its output.
-4. **Inspect and compare.** Read exceptions, measurements, and actual images.
-   Preserve failures; a completed command is not a passing evaluation.
-5. **Improve and retain.** Fix the cause supported by the evidence, sync or
-   rebuild, and test again. Keep useful code, configurations, failed hypotheses,
-   and validated results in project files and run artifacts for the next task.
-
-Keep the requested physical model. Teleporting a robot, welding a payload,
-or disabling collisions changes what the experiment proves. Use such
-approximations only when they are part of the agreed task.
-
-## Tools and workflows
+## Choose an execution loop
 
 | Work | Mechanism |
 |---|---|
-| Research methods, APIs, assets, and examples across libraries | [Research MCP](../antioch-research/SKILL.md): search, expand, open, grep, inspect versions |
-| Set up or change compute, images, dependencies, and source | Platform [environment](../antioch-platform/references/environment.md), [manifest](../antioch-platform/references/manifest.md), and [session CLI](../antioch-platform/references/sessions.md) |
-| A script with a finite lifetime | `antioch run src/main.py` |
-| Explore and modify a live scene | [Jupyter cells](references/jupyter.md) |
-| Inspect a viewpoint or sensor camera | [Navigation and capture](references/viewport.md) |
-| Repeatable checks over inputs | [Scenario design](../scenario-design/SKILL.md), then scenario or suite dispatch |
-| Investigate previous experiments | Platform [scenario history](../antioch-platform/references/scenarios.md) and [suites](../antioch-platform/references/suites.md) |
-| Generate datasets or develop policies | Isaac Sim [data collection](../isaac-sim-6/references/data-collection-sim.md) or [Isaac Lab](../isaac-lab-3/SKILL.md), then measured evaluation |
+| Explore a scene, controller, or repeated trial | [Jupyter kernel](references/jupyter.md): keep Kit, scene, and variables alive between calls |
+| Check a script from a clean process | `antioch service exec -- python src/main.py` |
+| Save repeatable verdicts and compare cases | [Scenarios and suites](../scenario-design/SKILL.md) |
 
-Preserve the user's choice of script, notebook, or recorded evaluation.
-Move an experiment into a scenario when it needs repeatable verdicts, cases,
-or durable comparison.
+Keep reusable code in project modules. In Jupyter, edit locally, reload the
+module, and call it again. Inspect state and images before changing the next
+variable. A dispatched scenario starts a fresh process; try one case before
+expanding to a large batch so warm kernel state cannot hide missing setup.
+After a timeout, inspect the existing operation before repeating side effects.
 
-Simulation is also a design choice: combine native APIs, Newton, custom Warp
-kernels or solvers, renderers, sensors, and controllers as the task requires.
-Research each integration and test its coupled behavior; components working
-separately do not prove they work together. Prefer existing assets and methods
-before building replacements or training a new model.
+## Connect the task to the right tools
 
-When fitting to real measurements, record units, calibration, and adjustable
-parameters; compare against a baseline and separate fitting data from validation
-data. Retain inputs and errors with the experiment; use scenario results and
-artifacts for recorded evaluations.
-Simulation evidence does not establish real-world reliability without relevant
-real-world validation.
+Start from the question and the existing project. Use [research](../antioch-research/SKILL.md) to find a compatible API or method, [assets](../antioch-platform/references/assets.md) to reuse a robot or environment, and the [Isaac Sim](../isaac-sim-6/SKILL.md) or [Isaac Lab](../isaac-lab-3/SKILL.md) guide for the native implementation. Keep platform setup in [Antioch platform](../antioch-platform/SKILL.md).
 
-## Close the loop with saved runs
+For a custom kernel or solver integration, identify who owns each state array, its device and frame, and the order in which controls, forces, integration, and observations run. Test the coupled loop against a small known case. A Warp kernel compiling by itself does not prove it is called at the correct point in a Newton or Isaac step.
 
-Preview definitions with `antioch scenario collect --json` and
-`antioch suite collect --json`. These expose parameters, cases, tags, and
-source paths without requesting compute or executing scenario bodies.
+For parameter fitting, define the measured quantities and units, choose free parameters and plausible bounds, and save the baseline before searching. Hold out measurements for validation. Use [cases and suites](../scenario-design/SKILL.md#inputs-and-execution-policy) for independent comparisons and the [Python client](../antioch-platform/references/python-client.md) when an outer optimization loop needs to collect, submit, and read results.
 
-Use CLI JSON to find and compare runs. Scenario history supports filters on
-structured fields and user-defined parameters and results. Read the selected
-run's terminal state, checks, measurements, logs, and relevant artifacts.
-Compare revisions and inputs as well as outcomes; a rerun uses saved images,
-not unbuilt notebook edits. Use leaf `--help` for filters and paging.
+For datasets, use [data collection](../isaac-sim-6/references/data-collection-sim.md) to define camera outputs, labels, variation, and writer behavior; inspect sample frames and annotations before scaling. For policies, use [Lab environment authoring](../isaac-lab-3/references/env-authoring.md) to establish observations, actions, resets, training, and evaluation. A saved run holds evidence, not a resumed simulator or training process.
 
-## Execution discipline
+## Measure the result
 
-When executing, set an experiment budget and leave time to inspect and save results.
-If a request times out, execution may still be running: inspect or stop the
-owned operation before retrying. Do not replay cells with unknown effects.
+Decide what proves success: images for appearance, body state and contacts
+for physical behavior, repeated cases for reliability. Read exceptions and
+measurements and inspect actual images. An exit code of zero proves neither
+physical correctness nor a passing evaluation.
 
-Keep reusable logic in source modules and use cells for short probes and
-calls. Confirm reusable code in a clean process before expanding to a suite.
-Save remote files before releasing the owned session. Report separately what
-was authored, what actually ran, what passed, and what remains unverified.
+Keep the requested physical model. Teleporting a robot, welding a payload,
+or disabling collisions changes what the experiment proves. Test coupled
+components together.
+
+Retain useful code and evidence. Report what you wrote, what ran, what
+passed, and what remains unverified.
+
+## Further guidance
+
+- For camera placement and inline images, load [navigation and capture](references/viewport.md).
+- For datasets, load [data collection](../isaac-sim-6/references/data-collection-sim.md); for policies, load [Isaac Lab](../isaac-lab-3/SKILL.md).
+- For a ROS 2 stack such as Nav2 or MoveIt 2 driving the simulated robot, load [ROS 2](../ros2/SKILL.md).
+- For research, assets, environment changes, or saved runs, choose the relevant [platform guide](../antioch-platform/SKILL.md#capability-guides).
+
+Bound experiments by the question: start with one seed, a short simulated interval, and the outputs needed to diagnose it. Expand cases or training only after that probe works and the user has authorized the larger run. Simulation evidence supports the modeled conditions; it does not replace validation on the physical system.

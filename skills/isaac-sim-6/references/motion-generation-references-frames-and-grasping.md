@@ -2,9 +2,7 @@
 
 Adapted from NVIDIA [`motion-generation/references/frames-and-grasping.md`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/motion-generation/references/frames-and-grasping.md) (Apache-2.0).
 
-Read [Isaac Sim on Antioch](../SKILL.md) for startup, imports, and runtime configuration.
-Native snippets run after startup, inside project functions or an active kernel.
-Linked upstream scripts are source examples, not installed plugin commands.
+[Isaac Sim task index](../SKILL.md#domain-references) · [Antioch startup](../../antioch-platform/references/simulation-code.md)
 
 Use this reference for motion-generation tool-frame targeting (any controller).
 Generic physical grasp validation lives in [manipulation-ik](manipulation-ik.md);
@@ -41,7 +39,6 @@ Do not derive a gripper pose from desired object orientation alone. Build a WXYZ
 tool quaternion from the desired tool-local `+Z` axis with the robot stack's
 quaternion utility, then log desired and measured axes at every critical phase.
 
-Then log desired and measured axes at every critical phase.
 
 ## Tool-local offset
 
@@ -70,10 +67,9 @@ Before lifting, validate at least:
 - object pose is still near the expected pre-lift pose
 - contact sensors or contact reports indicate contact, when available
 
-If contact reporting is not wired, use conservative geometry: visible contact
-marker overlap with the object AABB/grasp region, plus gripper closure progress.
-Do not require a gripper joint to exactly reach the commanded closed target when
-an object is between the fingers; stopping short can be contact evidence.
+Geometry and closure progress can diagnose a grasp when contact reporting
+is unavailable, but label them as proxies. A joint stopping short of its
+command can also reflect limits or controller error; it is not contact proof.
 
 ## Task feasibility
 
@@ -86,7 +82,7 @@ support.
 
 For ground-level UR10/Robotiq side grasps, a purely horizontal tool `+Z` can put
 the pads above a short object because the `tool0` to pinch-point offset has a
-vertical component. Measure the pad midpoint in an interactive-session diagnostic before
+vertical component. Measure the pad midpoint in a live-kernel diagnostic before
 closing; tune tool orientation/offset before changing controller gains.
 
 ## Source-specific note

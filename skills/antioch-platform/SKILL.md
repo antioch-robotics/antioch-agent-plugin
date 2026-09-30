@@ -1,137 +1,84 @@
 ---
 name: antioch-platform
-version: "1.5.11"
-description: >-
-  Explains Antioch's programming and cloud model and guides projects, CLI/YAML/SDK use, sessions, assets, scenarios, suites, results, and authentication. Load whenever Antioch is mentioned (including Anticoh), antioch.yaml or Antioch imports are present, or the conversation concerns Antioch. Supplies platform concepts alongside the agentic-simulation workflow entry point; routes native programming to the Isaac skills, cross-library research to antioch-research, and evaluation design to scenario-design.
+version: "1.5.42"
+description: Use for Antioch projects, CLI and Python client commands, antioch.yaml, sessions, services, builds, source sync, streams, assets, scenarios, suites, run history, and authentication. Explains the platform model and routes to detailed references; native engine code belongs to the Isaac skills and ROS 2 stacks to ros2.
 ---
 
 # Antioch
 
-Antioch runs user-owned Python on cloud GPUs. The development environment
-is the authoring client. Its SDK provides Python APIs, the CLI,
-and editor types; remote engine images contain Isaac and runtime dependencies.
-**No local Isaac installation or GPU is needed.** Users keep native simulator
-APIs in their code: Antioch abstracts infrastructure, not code.
+Antioch runs your Python on cloud GPUs. The local SDK supplies the CLI,
+Python APIs, and editor types; remote images contain the simulator. No local
+Isaac installation or GPU is needed. Keep native engine APIs in the project.
 
-See [agentic simulation](../agentic-simulation/SKILL.md) for the workflow and
-[research](../antioch-research/SKILL.md) to choose and connect native methods.
-The [project environment](references/environment.md) supplies engine images
-and dependencies for custom code as well as standard examples.
+## Find the project
 
-## Product model
+Use the nearest `antioch.yaml` in the current directory or its parents.
+Preserve its identity, engine, dependencies, and user changes. Run commands
+from that root with its Python environment active; launch the agent there too
+so the CLI and MCP adapters use the same SDK. Installed `--help` and SDK
+models are the authority for options. `antioch version --json` reports
+component versions and the deployment; `ANTIOCH_TRACE=1` explains command timing.
 
-- **Compute:** projects declare services in `antioch.yaml`. Antioch builds
-  their images remotely and runs them in GPU sessions.
-- **Simulation:** native engines supply physics, rendering, sensors, and
-  robots. The asset catalog holds reusable, versioned content.
-- **Evaluation:** scenarios and suites retain inputs, checks, results,
-  logs, artifacts, and telemetry for comparison.
-- **Agent tools:** skills, research, Jupyter, the CLI, and SDK connect
-  authoring, execution, inspection, and improvement.
+Work within the request. A question needs no compute; an access error does
+not authorize changing identity. Continue useful local work when remote
+access is blocked and report which checks remain unrun.
 
-A **project** is a source directory with `antioch.yaml`, dependencies, and
-image recipes. Its **services** are container workloads: a simulator and any
-supporting processes. A **revision** freezes the service images and manifest.
+## Choose how to work
 
-A **session** is temporary remote compute running that revision:
+A **project** is a source directory with `antioch.yaml`, Python dependencies, and image recipes. Its **services** are containers for the simulator and supporting software. Antioch builds their images remotely and saves them for reuse across the organization. A **revision** freezes the images and manifest. A **session** runs that revision on temporary compute. Organization identity scopes shared assets and run history; sessions belong to the person using them.
 
-- **Interactive:** one live session per user/project for scripts, shells,
-  source sync, Jupyter, and serial scenario or suite execution. Reuse it while
-  developing; release it when finished.
-- **Background:** detached scenario or suite execution against frozen images.
-  Antioch schedules work within capacity and quotas and retires its compute
-  after execution. It does not use the project's interactive session.
-
-A **scenario** is a typed Python evaluation with inputs, checks, results, and
-evidence. A **case** names parameter values. A **suite** selects scenarios and
-cases in YAML. Each execution creates new **run records**; those records and
-uploaded artifacts survive session retirement. A raw script creates no run
-history unless it explicitly records a scenario.
-
-A Jupyter **kernel** is a Python process whose state persists between cells
-inside an interactive session.
-
-Organization identity scopes shared assets and run history. Rome is the
-control plane; source and live process, Jupyter, and media traffic travel
-directly between the client and session. Save source and evidence before
-remote compute retires.
-
-## Start with the owning project
-
-Inspect the current directory and parents up to the repository or known
-authoring root. If needed, search shallow task directories for
-`antioch.yaml`, excluding caches and unrelated repositories. Use the nearest
-owning project; ask when several fit.
-
-A runnable simulation includes its environment, manifest, image recipe, and
-source. For a missing or incomplete project, follow
-[setup and repair](references/environment.md) and create the missing pieces.
-A plain Python script needs project configuration, but no scenario or suite.
-Preserve existing project IDs, engine choices, dependencies, and user work.
-
-Run project commands from that root with its virtual environment active.
-Launch the agent from the same environment so the CLI and MCP commands use
-the project's SDK. Restart the agent after SDK updates. Installed command
-`--help` and SDK models are the authority for options; use `--json` for
-structured records rather than parsing display tables.
-
-Match actions to the request. Questions and reviews do not authorize edits,
-installs, login, builds, or dispatch. If remote access fails, complete
-authorized local authoring and validation; report remote checks as unrun.
-Do not change identity or install local Isaac to repair a lookup.
-
-## Authoring and execution
-
-Use ordinary Python for simulation logic, YAML for services and suite
-selection, and the CLI for builds, sessions, dispatch, and history.
-[Scenario design](../scenario-design/SKILL.md) owns the Python authoring API:
-decorators, typed parameters, cases, checks, results, artifacts, and recording existing code. Load the
-relevant Isaac skill before writing native simulator code.
-
-| Deliverable | Path |
+| Need | Start here |
 |---|---|
-| Plain script | `antioch run src/main.py` |
-| Arbitrary service command | `antioch service exec --service sim -- nvidia-smi` |
-| Stateful exploration | Interactive session and [agentic simulation](../agentic-simulation/SKILL.md) |
-| Recorded test | `antioch scenario run --scenario NAME` |
-| Parameterized evaluation | `antioch suite run NAME` |
+| Run a script in an existing session | `antioch service exec -- python src/main.py` |
+| Iterate without restarting the simulator | [Jupyter kernel](../agentic-simulation/references/jupyter.md) |
+| Record inputs, checks, results, and artifacts | `antioch scenario run NAME`; [scenario design](../scenario-design/SKILL.md) |
+| Run a named selection of scenarios and cases | `antioch suite run NAME`; [suite YAML](references/suites.md) |
 
-Scenario and suite dispatch uses interactive compute by default. `--background`
-selects background compute; `--follow` and `--no-follow` control only whether
-the CLI waits. They do not change where work runs. See
-[session modes and lifecycle](references/sessions.md).
+`antioch session new` builds when needed and adds a session. Direct commands
+never allocate compute: use `--session SESSION_ID`, `--run RUN_ID` for a
+session a run used while that session remains live, or your only running session of this project that you
+started. Ambiguous selection is refused. Scenario and suite dispatch can
+obtain compute or target a session explicitly. Without a target, Antioch reuses sessions it started for your runs, never one you started yourself. Both count toward the same session quota. See [sessions](references/sessions.md) for selection, concurrency, and release.
 
-`run` and `service exec` can build and allocate compute when no interactive
-session exists; neither is a local check. A project has one live interactive session.
-`session new` replaces it; source sync changes files in the existing
-session, while image/dependency changes need a new one.
+A **scenario** is a typed Python evaluation; a **case** supplies parameter
+values. A **suite** selects scenarios and cases in YAML. Each execution
+creates run records and uploaded evidence that survive the session.
+A plain script creates no run history unless it calls a scenario.
 
-Project files run at `/workspace/project`. Session creation copies initial
-source; later `run` and `service exec` calls do not sync edits. Use `service sync`
-or `service watch` to apply changes. Background runs need source baked
-into their images. A rerun uses saved images and inputs, not unbuilt edits.
+## Keep code and compute in sync
 
-Keep `pxr`, `omni`, `carb`, `isaacsim`, and `isaaclab*` imports inside
-functions or `TYPE_CHECKING` blocks so local discovery works without Isaac.
-Read completed records and artifacts before reporting success. Closing Python,
-Kit, or an MCP connection does not release session compute.
+Image or dependency changes need a new session. Source edits use the
+manifest's `sync` mappings to `/workspace/project`: scripts, shells, and
+notebooks copy local files before starting and keep syncing while attached. Submitted runs
+carry a frozen source bundle and apply it when they start; reruns reuse the
+saved images and bundle. A command can overwrite files even while a run is
+executing, so avoid concurrent edits when preserving its inputs matters.
+
+Keep simulator imports inside functions or `TYPE_CHECKING` blocks so local
+discovery works without Isaac. Closing Python or an MCP connection does not
+release compute; save remote outputs before releasing a session you own.
 
 ## Capability guides
 
-Load the guide for the task, then follow its links as questions arise:
+Load the guide for the operation you need:
 
 | Task | Guide |
 |---|---|
-| Install/update tools, create or repair projects | [Environment](references/environment.md) |
-| Services, images, resources, routes, watch, profiles | [Manifest](references/manifest.md) |
-| Interactive/background modes, execution, sync, Jupyter, release | [Sessions](references/sessions.md) |
-| Scenario dispatch, filters, logs, artifacts, reruns | [Scenarios](references/scenarios.md) |
-| Suite selection, execution, comparison | [Suites](references/suites.md) |
-| Antioch catalog and native Isaac assets: find, load, measure, publish | [Assets](references/assets.md) |
-| Existing identity and login workflows | [Authentication](references/auth.md) |
+| `init`, `setup`, `version`: install tools, create projects, inspect versions, change images | [Environment](references/environment.md) |
+| Services, resources, routes, source mappings | [Manifest](references/manifest.md) |
+| `session`, `service`, `jupyter`: inspect/use/release compute, sync files, forward ports, open streams | [Sessions](references/sessions.md) |
+| `scenario`: collect, dispatch, filter, download, cancel, delete, or rerun evaluations | [Scenarios](references/scenarios.md) |
+| `suite`: collect, run, summarize, compare, cancel, delete, or repeat groups | [Suites](references/suites.md) |
+| `asset`: find, load, publish, verify, or repair reusable content | [Assets](references/assets.md) |
+| `auth`, including `auth registry`: identity and image access | [Authentication](references/auth.md) |
 | ROS bridge and cross-service traffic | [ROS 2](references/ros2.md) |
-| Build, inspect, evaluate, and repair simulations | [Agentic simulation](../agentic-simulation/SKILL.md) |
-| Native scene, physics, sensor, and robot code | [Isaac Sim](../isaac-sim-6/SKILL.md) |
-| Environments and RL training | [Isaac Lab](../isaac-lab-3/SKILL.md) |
-| Cross-library methods, APIs, examples, and source | [Research](../antioch-research/SKILL.md) |
-| Python scenario authoring, cases, checks, results, telemetry, recording | [Scenario design](../scenario-design/SKILL.md) |
+| ROS 2 nodes, tf2, Nav2, MoveIt 2, ros2_control against the simulator | [ROS 2](../ros2/SKILL.md) |
+| Script startup, native state, and rendering configuration | [Simulation code](references/simulation-code.md) |
+| Automate sessions, commands, submissions, and history in Python | [Python client](references/python-client.md) |
+| Diagnose a failed workflow | [Troubleshooting](references/troubleshooting.md) |
+
+Use [agentic simulation](../agentic-simulation/SKILL.md) for the experiment
+loop, [research](../antioch-research/SKILL.md) for native APIs,
+[Isaac Sim](../isaac-sim-6/SKILL.md) or [Isaac Lab](../isaac-lab-3/SKILL.md)
+for engine code, and [scenario design](../scenario-design/SKILL.md) for
+measured verdicts and telemetry.

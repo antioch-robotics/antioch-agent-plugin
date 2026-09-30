@@ -2,15 +2,9 @@
 
 Adapted from NVIDIA [`physics-simulation/SKILL.md`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/physics-simulation/SKILL.md) (Apache-2.0).
 
-Read [Isaac Sim on Antioch](../SKILL.md) for startup, imports, and runtime configuration.
-Native snippets run after startup, inside project functions or an active kernel.
-Linked upstream scripts are source examples, not installed plugin commands.
+[Isaac Sim task index](../SKILL.md#domain-references) · [Antioch startup](../../antioch-platform/references/simulation-code.md)
 
-## Purpose
-
-Configure PhysicsScene and per-prim rigid bodies, collisions, materials, joint drives, solver selection, and physics sensors with worked examples.
-
-Startup and engine pinning are in [../SKILL.md](../SKILL.md). Scene composition is in [usd.md](usd-composition-architecture.md) / [usd-composition-architecture.md](usd-composition-architecture.md). Articulations: [usd-articulation.md](usd-articulation.md). Importers: [urdf-mjcf-to-usd-conversion.md](urdf-mjcf-to-usd-conversion.md).
+Scene composition is in [usd-composition-architecture.md](usd-composition-architecture.md), articulations in [usd-articulation.md](usd-articulation.md), importers in [urdf-mjcf-to-usd-conversion.md](urdf-mjcf-to-usd-conversion.md), and mechanism recipes (impact, feeders, tops, cradles, escapements) in [physics-simulation-examples.md](physics-simulation-examples.md).
 
 ## Upstream helpers (source examples)
 
@@ -18,9 +12,7 @@ Startup and engine pinning are in [../SKILL.md](../SKILL.md). Scene composition 
 |---|---|
 | [`scripts/prim_physics_setup.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/physics-simulation/scripts/prim_physics_setup.py) | Per-prim physics setup helpers for Isaac Sim / USD (Kit 110) |
 
-Not a bundled command.
-
-Targets Isaac Sim 6.0.1 / Kit 110.1.2. Both backends share `UsdPhysics.*`; backend-specific behavior is called out per section.
+Both backends share `UsdPhysics.*`; backend-specific behavior is called out per section.
 
 ## Backend selection (Kit 110)
 
@@ -52,22 +44,11 @@ Both Newton and PhysX consume the standard `UsdPhysics.Scene` + `PhysxSchema.Phy
 
 Use one stepping owner: classic `World`/`SimulationContext`, experimental `SimulationManager`, or a Lab environment loop. Do not wrap a framework that already owns an app in another `SimulationApp` or a second `World`.
 
-## Stack and reading order
-
-1. This reference: scene config, per-prim setup, contact materials, drives, sensors, readback, backend selection.
-2. [usd-articulation.md](usd-articulation.md): multi-link articulations + Robot Schema overlay.
-3. [urdf-mjcf-to-usd-conversion.md](urdf-mjcf-to-usd-conversion.md): importer config (RL vs teleop drives).
-4. [isaac-sim-troubleshooting.md](isaac-sim-troubleshooting.md): when physics misbehaves.
-
-Mechanism recipes (impact, feeders, dominoes, tops, cradles, pendulum waves, escapements) live in [physics-simulation-examples.md](physics-simulation-examples.md).
-
----
-
 ## Part 1 — Scene-level configuration
 
 ### PhysicsScene setup
 
-A physics scene is required, but `/World/PhysicsScene` is only a convention; do not create a conflicting second scene. Read stage units and up-axis.
+A physics scene is required, but `/World/PhysicsScene` is only a convention; do not create a conflicting second scene. Read stage units and up-axis. `antioch.world()` returns the classic `World`, which already owns `/physicsScene`: set its timestep, solver type, CCD, stabilization, and gravity through `world.get_physics_context()`. Author a scene like the one below only on a stage without one.
 
 ```python
 from pxr import Usd, UsdGeom, UsdPhysics, PhysxSchema, Gf
@@ -100,19 +81,19 @@ With `physics_dt` smaller than `render_dt`, `World.step(render=True)` advances `
 
 ### Solver iteration counts (per-body, starting points)
 
-Set on `PhysxRigidBodyAPI` per body that needs it. Higher = more accurate, slower.
+Set on `PhysxRigidBodyAPI` per body that needs it. Higher = more accurate, slower. Under TGS, raise position iterations: Isaac Lab's shipped robots use 4–32 position and 0–4 velocity iterations, and a body with more than 4 velocity iterations logs `more than 4 velocity iterations being added to a TGS scene`.
 
 | Scenario | Position iters | Velocity iters |
 |---|---|---|
-| Simple rigid bodies, tumbling | 16 | 4 |
-| Stacking | 32 | 8 |
-| Complex joints / articulations | 64 | 16 |
-| Stiff contact chains (cradle, escapement) | 64 | 32 |
+| Simple rigid bodies, tumbling | 16 | 1 |
+| Stacking | 32 | 1 |
+| Complex joints / articulations | 64 | 1 |
+| Stiff contact chains (cradle, escapement) | 64 | 4 |
 
 ```python
 pxrb = PhysxSchema.PhysxRigidBodyAPI.Apply(prim)
 pxrb.CreateSolverPositionIterationCountAttr().Set(32)
-pxrb.CreateSolverVelocityIterationCountAttr().Set(8)
+pxrb.CreateSolverVelocityIterationCountAttr().Set(1)
 pxrb.CreateEnableCCDAttr().Set(True)
 ```
 
@@ -135,11 +116,7 @@ px.CreateEnableStabilizationAttr().Set(False)
 
 Use [`scripts/prim_physics_setup.py`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/physics-simulation/scripts/prim_physics_setup.py) for dynamic, static, and kinematic body setup. It keeps the `RigidBodyAPI`, `MassAPI`, and `CollisionAPI` application sequence in one executable implementation.
 
-Keep `UsdPhysics.RigidBodyAPI` and colliders on the intended ownership hierarchy; an unintended nested rigid body changes it. Visual versus collision geometry, static/dynamic/kinematic mode, mass, center of mass, inertia, initial penetration, filters, self-collision, materials, friction, restitution, contact offsets, joint frames/limits, actuator mode, stiffness, damping, and effort limits all matter. A convex hull can close a visible gap, and nonuniform scale changes collision behavior.
-
-Collider children can belong to a rigid-body ancestor. Keep that ownership
-hierarchy intact; do not add nested rigid bodies merely to put both APIs on
-the same prim.
+Collider children can belong to a rigid-body ancestor; an unintended nested rigid body changes ownership, so do not add one merely to put both APIs on the same prim. A convex hull can close a visible gap, and nonuniform scale changes collision behavior.
 
 ### Static colliders with scale — translate-first pattern
 
@@ -199,23 +176,36 @@ def create_contact_material(stage, mat_path, static_friction=0.5, dynamic_fricti
 
 For chains of stiff contacts (Newton's cradle, escapements), set `restitutionCombineMode=max` on `PhysxMaterialAPI` so the highest restitution wins at each contact.
 
+PhysX averages the two materials' restitution by default, and `add_ground_plane` defaults to restitution 0.8. `world.scene.add_ground_plane(restitution=...)` binds its material to the plane's `geom` mesh only; a body that crosses that mesh within one step meets `collisionPlane`, which has no physics material. A 3 cm ball dropped at 60 Hz with restitution 0.8 on both bodies rebounded at about 0.41 until the material was bound to `collisionPlane` too:
+
+```python
+from isaacsim.core.prims import SingleGeometryPrim
+
+ground = world.scene.add_ground_plane(restitution=0.8)
+SingleGeometryPrim(f"{ground.prim_path}/collisionPlane").apply_physics_material(ground.get_applied_physics_material())
+```
+
 ---
 
-## Part 4 — Joint drives
+## Part 4: Joint drives
 
 ```python
 joint = stage.GetPrimAtPath("/World/Robot/joint_arm")
 drive = UsdPhysics.DriveAPI.Apply(joint, "angular")  # "angular" | "linear"
 drive.CreateTypeAttr().Set("force")  # "force" | "acceleration"
-drive.CreateStiffnessAttr().Set(1000.0)  # example Kp (Nm/rad for angular)
-drive.CreateDampingAttr().Set(100.0)  # example Kd (Nm·s/rad)
+drive.CreateStiffnessAttr().Set(1000.0)  # example force-drive Kp (N m/degree for angular)
+drive.CreateDampingAttr().Set(100.0)  # example force-drive Kd (N m s/degree for angular)
 drive.CreateMaxForceAttr().Set(500.0)  # torque/force limit
 drive.CreateTargetPositionAttr().Set(0.0)  # target (deg or m)
 ```
 
+USD angular targets use degrees, so direct force-drive gains use N m/degree and N m s/degree. The [URDF importer](urdf-mjcf-to-usd-conversion.md) accepts gains per radian and converts them; do not copy its input values directly into USD attributes. Linear force-drive gains use N/m and N s/m. Acceleration drives use acceleration-based gains instead.
+
 A drive target is not a direct state write. Author initial conditions before reset; initialize views/controllers through the selected framework, reset, then apply live targets.
 
-**For RL training**, the agent commands torques directly. Set drive_type to `none` and stiffness/damping to 0 in `config.yaml` (see [urdf-mjcf-to-usd-conversion.md](urdf-mjcf-to-usd-conversion.md)). Active PD drives fight the RL agent.
+For direct torque control, avoid unintended PD drives alongside commanded
+torques. Position- and velocity-action policies may deliberately use drives;
+match the selected actuator model rather than disabling them for all RL.
 
 **For revolute pendulum joints** (clock escapements, pendulum waves), set joint friction to 0 when you need conserved swing:
 
@@ -232,43 +222,30 @@ joint_api.CreateJointFrictionAttr().Set(0.0)
 
 | You want | Use |
 |---|---|
-| Default Antioch session, legacy PhysX scenes | **PhysX** |
-| RL training with thousands of envs | **Newton** (Featherstone or MuJoCo) — explicit `SimulationConfig` |
-| Differentiable simulation | **Newton** (standalone vs Isaac integration differ) |
-| Soft bodies, cloth, deformables | **Newton** (VBD or XPBD) — verify the pinned feature |
+| Default `SimulationConfig`, legacy PhysX scenes | **PhysX** |
+| RL training with thousands of envs | **Newton** through Isaac (SolverMuJoCo) — explicit `SimulationConfig` |
+| Differentiable simulation | Standalone **Newton** (SolverFeatherstone or SolverSemiImplicit); Isaac's Newton solvers are not differentiable |
+| Soft bodies, cloth, deformables | **PhysX** deformables in Isaac, or standalone **Newton** SolverVBD — verify the pinned feature |
 | Validated against MuJoCo baselines | **Newton SolverMuJoCo** |
 
 Retrieve the selected backend's implementation and test that path. Enabling Newton does not imply feature parity with PhysX.
 
 ### Newton solvers
 
-| Solver | Coordinates | Differentiable | Best For |
+Isaac Sim 6.0.1's Newton bridge (`isaacsim.physics.newton`) constructs only
+`SolverXPBD` and `SolverMuJoCo`, and syncs only rigid bodies to the stage. The
+other solvers run only when you drive the Newton library directly.
+
+| Solver | Coordinates | Differentiable | Suited to |
 |---|---|---|---|
-| **SolverFeatherstone** | Generalized | Yes (Warp) | Articulated robots (default for manipulators, legged) |
-| **SolverMuJoCo** | Generalized | Yes (mujoco-warp) | Validated locomotion, MuJoCo policy ports |
-| **SolverXPBD** | Maximal | Partial | Soft constraints, cables, ropes |
-| **SolverSemiImplicit** | Maximal | Yes (Warp) | Fast prototyping, simple rigid bodies |
-| **SolverVBD** | (deformable) | Yes | Soft bodies, deformables |
+| **SolverMuJoCo** | Generalized | No | Articulated robots, MuJoCo/MJCF baselines and policy ports (via Isaac) |
+| **SolverXPBD** | Maximal | No | Rigid bodies via Isaac; particles and experimental soft bodies in standalone Newton |
+| **SolverFeatherstone** | Generalized | Basic | Articulated robots and diffsim examples in standalone Newton |
+| **SolverSemiImplicit** | Maximal | Basic | Simple rigid bodies and particles, diffsim examples |
+| **SolverVBD** | Particles / maximal rigid bodies | No | Cloth, soft bodies, and rods; the only solver for CABLE joints (experimental) |
 
-These solver names are Newton-library surfaces. Confirm which are wired through Isaac's USD/tensor integration at this pin before depending on them.
-
-### Newton vs PhysX differences
-
-| Aspect | PhysX | Newton |
-|---|---|---|
-| Backend | Closed C++/CUDA | Warp/CUDA (open, JIT) |
-| Coordinates | Maximal (6DoF per body) | Generalized (Featherstone) or maximal |
-| Differentiable | No | Yes (native Warp autodiff) |
-| Multi-GPU | Limited | Yes (Warp device abstraction) |
-| USD integration | Schema extensions | Native USD loader |
-| Performance ceiling | Good < 4096 envs | Designed for 10K+ envs |
-
-### Newton + Torch — init order
-
-For a Newton/Torch startup hang, isolate backend initialization and device allocation
-in a small reproduction. Follow the selected framework's import and startup
-order; do not impose an arbitrary settle loop as a dependency. A CPU checkpoint
-load does not make a controller's inference path CPU-compatible.
+"Basic" differentiability means Newton ships diffsim examples for that solver,
+not full gradient coverage.
 
 ### Newton-specific configuration (Isaac Lab)
 
@@ -292,7 +269,7 @@ Classic `isaacsim.sensors.physics` is **deprecated, not removed**. Classic conta
 
 Author experimental contact at a child path such as `/World/Robot/foot/contact_sensor`, not at the collider/body path itself. `Contact.create` needs an enabled rigid-body ancestor and collision geometry.
 
-Proximity, a command acknowledgement, or a missing contact report is not physical contact. Check filters, reporting thresholds, force/impulse units, and sample time. A contact value read over a render step is accumulated over `render_dt / physics_dt` substeps; divide by that interval, not by `physics_dt`.
+Proximity, a command acknowledgement, or a missing contact report is not physical contact. Contact reports (`ContactEventType.CONTACT_FOUND`, `CONTACT_PERSIST`, and `CONTACT_LOST` at this pin) begin inside the contact offset: a Nova Carter report arrived at 0.10 m separation, so count a hit from `separation <= 0` or a nonzero impulse. Check filters, reporting thresholds, force/impulse units, and sample time. A contact value read over a render step is accumulated over `render_dt / physics_dt` substeps; divide by that interval, not by `physics_dt`.
 
 ### Contact
 
@@ -354,7 +331,7 @@ hit = get_physx_scene_query_interface().raycast_closest(origin, unit_direction, 
 This is a PhysX scene query returning a dictionary. It is not a method of the
 tensor `SimulationView`, and does not establish Newton backend support.
 
-For higher-fidelity sensor simulation (LiDAR scan patterns, multi-ray, vendor sensor models, depth/radar/acoustic), see [sensors.md](isaac-sim-sensor.md), [isaac-sim-sensor.md](isaac-sim-sensor.md), and [isaac-camera.md](isaac-camera.md). They use `isaacsim.sensors.experimental.rtx` and `.physics`. Viewport helpers do not replace those sensors.
+For higher-fidelity sensor simulation (LiDAR scan patterns, multi-ray, vendor sensor models, depth/radar/acoustic), see [isaac-sim-sensor.md](isaac-sim-sensor.md) and [isaac-camera.md](isaac-camera.md). They use `isaacsim.sensors.experimental.rtx` and `.physics`. Viewport helpers do not replace those sensors.
 
 ---
 
@@ -372,7 +349,7 @@ Select the body explicitly, even for a `(1, 3)` position. USD transforms and an 
 
 ### Why XformCache is wrong during sim
 
-`updateToUsd=True` writes physics state to **Fabric**, not the USD stage layer. `XformCache` reads the USD layer. Result: it can return initial poses.
+For PhysX, `SimulationManager.enable_fabric(True)` enables `omni.physx.fabric` and sets `/physics/updateToUsd` to `False`. Simulated poses then update Fabric instead of the USD stage. `XformCache` reads USD, so it can return the initial poses. Even with USD writeback enabled, invalidate a cached transform after changes. Read live state through the owning physics API.
 
 ### RigidPrim / GeomPrim pattern (Kit 110)
 
@@ -422,21 +399,17 @@ euler = r.as_euler("xyz", degrees=True)
 
 ## Part 8 — Common gotchas
 
-1. A collider without a rigid-body owner is static; a rigid-body ancestor can own child colliders.
-2. Compound bodies keep one intended rigid-body owner, not a nested body per collider.
-3. **Kinematic bodies**: use `CreateKinematicEnabledAttr().Set(True)`, not enable/disable on RigidBodyAPI.
-4. **`Cube.size=1.0`** = half-extent 0.5. Use `size=2.0` if you want scale ops to equal half-extents.
-5. **`physics:velocity` USD attributes are ignored** by PhysX at runtime. Use `RigidPrim.set_velocities(...)` **after play/reset**.
-6. **`physics:angularVelocity` is in degrees/second** on the USD attribute; runtime tensors often use rad/s. Convert at the boundary.
-7. **`World.step(render=True)`** (or the selected framework's step) advances physics with render. `app.update()` does not define the physics timestep.
-8. **Experimental sensors need `app_utils.play(commit=True)`** (or the framework play) before `get_data()`; do not call `initialize()` from the legacy `World` flow.
-9. **`get_rigid_body_state()` is not the experimental API**; use `RigidPrim.get_world_poses()`. Dynamic Control (`dc.get_rigid_body_pose`) is not a current recommended surface at this pin.
-10. **Contact-chain behavior depends on the solver and setup** (see [Worked Example 4: Newton's Cradle](physics-simulation-examples.md)).
-11. **Tunneling at high spin rates**: inspect collision geometry, CCD, and timestep; verify the task again after any approximation change.
-12. **Before controller diagnosis**: verify a `PhysicsScene`, active stepping owner, and expected collision APIs are present.
+1. A collider without a rigid-body owner is static.
+2. **Kinematic bodies**: use `CreateKinematicEnabledAttr().Set(True)`, not enable/disable on RigidBodyAPI.
+3. **`physics:angularVelocity` is in degrees/second** on the USD attribute; runtime tensors often use rad/s.
+4. **Experimental sensors need `app_utils.play(commit=True)`** (or the framework play) before `get_data()`; do not call `initialize()` from the legacy `World` flow.
+5. **`get_rigid_body_state()` is not the experimental API**; use `RigidPrim.get_world_poses()`. Dynamic Control (`dc.get_rigid_body_pose`) is not a current surface at this pin.
+6. **Tunneling at high spin rates**: inspect collision geometry, CCD, and timestep.
 
----
+7. Runtime velocity changes belong to the active physics view after play/reset; authoring `physics:velocity` does not reliably command an already simulated body.
+8. `app.update()` does not define a physics timestep. Use the chosen stepping owner and measure simulation time.
+9. Before blaming a controller, check that the physics scene exists, the timeline is playing, the bodies have the intended collision and rigid-body owners, and the control loop actually steps physics.
 
-## Worked examples (impact, vibratory feeder, gyro, cradle, escapement)
+For a physical claim, inspect visual versus collision geometry, collision filters, contact/rest offsets, mass, center of mass, inertia, damping, joint limits and drives, solver settings, and live-state readback. A correct-looking render can hide a different physical model.
 
-See [physics-simulation-examples.md](physics-simulation-examples.md).
+When diagnosing a Newton/CUDA startup failure, reduce it to startup, play, and one state read before loading a policy. The upstream guide reports a Torch initialization-order problem; reproduce it on the pinned runtime before treating all Torch imports as invalid. Use [troubleshooting](isaac-sim-troubleshooting.md) for a bounded probe, [Isaac Lab](../../isaac-lab-3/SKILL.md) for framework-owned startup, and [scenario design](../../scenario-design/SKILL.md) to record the result.

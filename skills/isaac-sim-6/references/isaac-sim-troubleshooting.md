@@ -2,13 +2,7 @@
 
 Adapted from NVIDIA [`isaac-sim-troubleshooting/SKILL.md`](https://github.com/isaac-sim/IsaacSim/blob/7c206f75bdadd9e05fc457f19863ca4c3f0cb693/skills/isaac-sim-troubleshooting/SKILL.md) (Apache-2.0).
 
-Read [Isaac Sim on Antioch](../SKILL.md) for startup, imports, and runtime configuration.
-Native snippets run after startup, inside project functions or an active kernel.
-Linked upstream scripts are source examples, not installed plugin commands.
-
-## Purpose
-
-Diagnose Isaac Sim startup hangs, stage-load stalls, MDL/shader compilation freezes, physics stepping blocks, Replicator/Hydra issues, Nucleus latency, and GPU OOM crashes.
+[Isaac Sim task index](../SKILL.md#domain-references) · [Antioch startup](../../antioch-platform/references/simulation-code.md)
 
 ## Limitations
 
@@ -119,6 +113,8 @@ Many layers can increase resolution and load time. Measure before choosing a pac
 
 **1. Excessive layer count (>1,000 layers)**
 
+The upstream example reported these cold-load measurements; they are not a benchmark for every stage or service:
+
 | Strategy | Cold Load | Layers |
 |----------|-----------|--------|
 | Per-asset files | 4 min | 11,488 |
@@ -153,18 +149,21 @@ for layer in stage.GetUsedLayers():
 
 Fix:
 ```python
-# Ensure PhysicsScene exists before reset
-if not stage.GetPrimAtPath("/World/PhysicsScene"):
-    ps = UsdPhysics.Scene.Define(stage, "/World/PhysicsScene")
-    
-# Reduce initial contact storm
+from pxr import PhysxSchema, UsdPhysics
+
+# Reuse the existing scene, including the classic World's /physicsScene.
+scenes = [UsdPhysics.Scene(prim) for prim in stage.Traverse() if prim.IsA(UsdPhysics.Scene)]
+if len(scenes) > 1:
+    raise ValueError("Select the physics scene owned by this simulation before changing its settings")
+ps = scenes[0] if scenes else UsdPhysics.Scene.Define(stage, "/World/PhysicsScene")
+px_scene = PhysxSchema.PhysxSceneAPI.Apply(ps.GetPrim())
 px_scene.CreateEnableStabilizationAttr().Set(True)
 ```
 
 ## Section 5: Replicator Hangs
 
 - `rep.orchestrator.run()` hangs: ensure the timeline is playing (`omni.timeline.get_timeline_interface().play()` or `isaacsim.core.experimental.utils.app.play(commit=True)`) before invoking.
-- `step_async()` never completes: use `await rep.orchestrator.step_async()` correctly inside an async context.
+- `step_async()` never completes: use `await rep.orchestrator.step_async()` inside an async context. If the orchestrator waits for the default viewport without a livestream, set `SimulationConfig(viewport_updates=True)` at startup and keep pumping Kit through the app. The default follows livestream state; enabling viewport updates does not create physics steps or replace the owning loop.
 - Frame capture hangs: call `app_utils.update_app()` (or a `simulation_app.update()`) once before capture so the renderer has a fresh frame.
 
 ## Section 6: Rendering (Hydra) Hangs
