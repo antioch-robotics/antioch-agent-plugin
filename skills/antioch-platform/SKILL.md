@@ -1,6 +1,6 @@
 ---
 name: antioch-platform
-version: "1.5.42"
+version: "1.5.43"
 description: Use for Antioch projects, CLI and Python client commands, antioch.yaml, sessions, services, builds, source sync, streams, assets, scenarios, suites, run history, and authentication. Explains the platform model and routes to detailed references; native engine code belongs to the Isaac skills and ROS 2 stacks to ros2.
 ---
 

@@ -96,7 +96,7 @@ antioch scenario rerun SCENARIO_RUN_ID --set drop_height=1,2 --timeout 600
 
 Cancel signals active work and preserves completed evidence. A rerun creates
 new records from saved images and inputs and runs the saved bundle, not local
-edits. Antioch chooses a session unless you pass `--session SESSION_ID` or `--run RUN_ID` to select an existing live session, which must serve the saved revision. It needs no checkout. For grid reruns, `--parallel` controls concurrency only when Antioch chooses sessions; combining it with either session selector is refused. `--set`, `--timeout` and `--stream/--no-stream`
+edits. Antioch chooses a session unless you pass `--session SESSION_ID` or `--run RUN_ID` to select an existing live session, which must serve the saved revision. It needs no checkout. For grid reruns, `--parallel` controls concurrency only when Antioch chooses sessions; with either session selector only `--parallel 1` is accepted, the same as leaving it out. `--set`, `--timeout` and `--stream/--no-stream`
 change only those inputs; `--set` spells a grid as on `scenario run`, a key
 must be a saved parameter, and its value keeps the saved type. Bounds and
 allowed values refuse before submission when the checkout is exactly the
