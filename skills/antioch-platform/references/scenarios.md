@@ -102,6 +102,6 @@ must be a saved parameter, and its value keeps the saved type. Bounds and
 allowed values refuse before submission when the checkout is exactly the
 pinned code, else when the rerun starts. In-session and
 source-free records have no managed rerun.
-`antioch scenario delete --run SCENARIO_RUN_ID` previews and confirms deletion of a completed standalone run. A suite child is deleted with its suite. Deletion is separate from cancellation and must be within the user's request. Deleting another member's records also requires `--all-owners` and sufficient authority.
+`antioch scenario delete --run SCENARIO_RUN_ID` previews and confirms deletion of a completed run, standalone or in a finished suite run; deleting a suite run's last scenario run deletes the suite run. Deletion is separate from cancellation and must be within the user's request. Deleting another member's records also requires `--all-owners` and sufficient authority.
 
 Use [the Python client](python-client.md#collect-inspect-and-submit) to collect and submit these same selections programmatically. For grouped evaluations, continue with [suites](suites.md); for evidence that renders incorrectly, use [telemetry](../../scenario-design/references/telemetry.md). Return to [Antioch platform](../SKILL.md#capability-guides) for other operations.

@@ -349,7 +349,7 @@ Select the body explicitly, even for a `(1, 3)` position. USD transforms and an 
 
 ### Why XformCache is wrong during sim
 
-For PhysX, `SimulationManager.enable_fabric(True)` enables `omni.physx.fabric` and sets `/physics/updateToUsd` to `False`. Simulated poses then update Fabric instead of the USD stage. `XformCache` reads USD, so it can return the initial poses. Even with USD writeback enabled, invalidate a cached transform after changes. Read live state through the owning physics API.
+For PhysX, `SimulationManager.enable_fabric(True)` enables `omni.physx.fabric` and sets `/physics/updateToUsd` to `False`. Isaac does this itself only for cuda physics. With CPU physics every body's pose and velocity is written to USD each substep and copied back for the renderer; calling `SimulationManager.enable_fabric(True)` after building the `World` sped a replayed single-arm assembly from 0.22x to 0.29x real time. Do it only when the code reads live poses through physics APIs. Simulated poses then update Fabric instead of the USD stage. `XformCache` reads USD, so it can return the initial poses. Even with USD writeback enabled, invalidate a cached transform after changes. Read live state through the owning physics API.
 
 ### RigidPrim / GeomPrim pattern (Kit 110)
 
@@ -397,7 +397,18 @@ euler = r.as_euler("xyz", degrees=True)
 
 ---
 
-## Part 8 — Common gotchas
+## Part 8 — Loop cost
+
+Measured on a single-arm assembly scene at 400 Hz physics and 50 Hz render; treat these as directions to measure, not constants.
+
+| Choice | What it cost | Starting point |
+|---|---|---|
+| GPU physics for one robot | ~16 ms per substep on cuda vs ~2 ms on CPU | CPU PhysX for one robot at a high step rate; GPU pays off across many environments |
+| PhysX CPU threads | ~0.7 ms of task dispatch per substep on a small scene; fewer threads slowed SDF-heavy contact | For small scenes with cheap contacts, try `--/persistent/physics/numThreads=0` to `2` in `extra_args`, and measure |
+| Physics rate | Every Kit and Python per-step callback runs each substep: ~17 ms per 50 Hz frame at 400 Hz | The lowest rate the controllers need; keep per-step callbacks light |
+| SDF mesh colliders | One SDF per mesh (384 in one part) made hundreds of broadphase pairs once nested in another SDF part: 30–65 ms per frame | One SDF per part from a merged mesh, convex shapes for features that never carry load |
+
+## Part 9 — Common gotchas
 
 1. A collider without a rigid-body owner is static.
 2. **Kinematic bodies**: use `CreateKinematicEnabledAttr().Set(True)`, not enable/disable on RigidBodyAPI.

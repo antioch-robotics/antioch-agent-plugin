@@ -48,7 +48,7 @@ antioch service cp sim:/workspace/project/output.png ./output.png
 ```
 
 Antioch options precede `--`; everything after it is the remote command.
-It runs in `/workspace/project` and returns the process exit status. Pass `--stream` to watch the simulation in Mission Control. Without it, Isaac runs headless; `SimulationConfig(stream=False)` also keeps a process headless when the flag is present. Ctrl-C stops the process, not its session.
+It runs in `/workspace/project` and returns the process exit status. Pass `--stream` to watch the simulation in Mission Control, or `--no-stream` to keep it headless; either flag overrides the code. Without one, the code's `SimulationConfig(stream=...)` decides, and Isaac runs headless by default. Ctrl-C stops the process, not its session.
 
 Exec, shell, Jupyter, and restart copy the manifest's `sync` mappings first;
 attached commands keep copying local edits. A watcher that has not seen another local edit leaves a later run's installed bundle alone; the next edit or new command applies the checkout again. Local files win, removed mapped
@@ -118,6 +118,6 @@ Sessions you start release after fifteen idle minutes by default; sessions Antio
 
 Exec and shell forward stdin and return when the remote process exits. Terminal detection enables a PTY; `--tty` and `--no-tty` override it. A PTY combines stdout and stderr and forwards terminal resize events. Use `--no-tty` for a piped command that must read until EOF: a PTY cannot half-close its write side, so local EOF sends no synthetic Ctrl-D. An interactive shell requires a local terminal. Output buffers are bounded; an output-gap notice means some bytes were no longer available, not that the remote program stopped.
 
-Each Isaac service has one native video producer. A second process cannot claim an occupied stream; leave out `--stream` for commands that do not need it. Mission Control can show the selected service's stream while its simulator is running. A stream does not step physics or keep an idle session alive. [Simulation configuration](simulation-code.md#simulationconfig) controls startup and picture quality; [viewport capture](../../agentic-simulation/references/viewport.md) returns inspection images to the agent, and [telemetry](../../scenario-design/references/telemetry.md) saves run evidence.
+Each Isaac service has one native video producer. A second process cannot claim an occupied stream; leave out `--stream` for commands that do not need it. Mission Control can show the selected service's stream while its simulator is running, and its live Rerun telemetry from a scenario or an `antioch.Telemetry` script without `--stream`. A stream does not step physics or keep an idle session alive. [Simulation configuration](simulation-code.md#simulationconfig) controls startup and picture quality; [viewport capture](../../agentic-simulation/references/viewport.md) returns inspection images to the agent, and [telemetry](../../scenario-design/references/telemetry.md) saves run or script evidence.
 
 For automation, the [Python client](python-client.md#use-an-existing-session) exposes the same session and service operations. Return to the [platform guide](../SKILL.md#capability-guides) for builds, run dispatch, and assets.

@@ -17,7 +17,7 @@ import antioch
 antioch.start_simulation(antioch.SimulationConfig(log_level="warning"))
 ```
 
-The MCP does not request video. To watch Isaac in Mission Control, use `antioch jupyter cell --stream` for the cell that first starts it, including in an existing kernel. If Isaac has already started headless, restart the kernel before changing its stream mode. [Simulation configuration](../../antioch-platform/references/simulation-code.md#simulationconfig) explains the startup settings.
+The MCP does not request video. To watch Isaac in Mission Control, start it with `antioch.start_simulation(antioch.SimulationConfig(stream=True))`, or use `antioch jupyter cell --stream` for the cell that first starts it. If Isaac has already started headless, restart the kernel before changing its stream mode. [Simulation configuration](../../antioch-platform/references/simulation-code.md#simulationconfig) explains the startup settings.
 
 Keep the code you are developing in project modules and drive it from short
 cells; the kernel runs in the project directory:
@@ -32,7 +32,7 @@ print(trial.run(drop_height=2.0))
 ```
 
 Edit the module locally, reload, call again. Whether you or Antioch started the session, `jupyter_execute` syncs your local files before each cell. On a session executing a run, this can change files the run or its helper services read later. Avoid concurrent edits when preserving that run's inputs matters; see [source sync](../../antioch-platform/references/sessions.md#run-and-sync-source). To see the scene,
-`from antioch.lib import viewport` and `display(await viewport.observe_async())`
+`from antioch.viewport import capture` and `display(await capture.observe_async())`
 show the live frame inline; see [navigation and capture](viewport.md).
 
 ## Control one kernel

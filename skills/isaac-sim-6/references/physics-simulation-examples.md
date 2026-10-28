@@ -20,7 +20,7 @@ Compare a rigid mount with a compliant mount, then measure where the impact ener
 
 **Velocity injection:** set linear velocity via experimental `RigidPrim.set_velocities(linear_velocities=...)`
 **after** play/reset through the stepping owner. The USD `physics:velocity` attribute is authored, not
-runtime — this is documented in Part 8 of [physics-simulation.md](physics-simulation.md).
+runtime — this is documented in Part 9 of [physics-simulation.md](physics-simulation.md).
 
 **Analysis:**
 ```

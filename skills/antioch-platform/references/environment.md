@@ -46,7 +46,7 @@ from the deliverable.
 These SDK calls need no authentication or simulator:
 
 ```python
-from antioch.core.project import load_manifest
+from antioch.transport.project import load_manifest
 from common.models import ProjectManifest
 
 manifest = load_manifest()
@@ -58,10 +58,16 @@ Inspect schema fields and installed API docstrings rather than guessing keys.
 
 ## Images and source
 
-Init pins the installed SDK in `FROM antioch-engine/<engine>:<sdk-version>`.
-Dockerfile engine references require a release tag; an untagged service
-`image` uses the submitting SDK release. Scenario capability follows verified
-image metadata, not the service name.
+An engine image is `antioch-engine/<engine>`, such as
+`antioch-engine/isaac-sim-6.0.1`; the simulator version is part of the name.
+Write it untagged, as init does: a Dockerfile `FROM` or service `image` with
+no tag uses the SDK of the CLI that saves the revision, so the project's
+lockfile is the one pin. Add `:<sdk-version>` only when the user wants one SDK
+release held. Engine services in one session must share an SDK, so tag all of
+them or none. Scenario capability follows verified image metadata, not the
+service name.
+
+External Dockerfile `FROM` tags resolve to immutable digests before Antioch computes the build key; use `@sha256:` when you want to choose the digest yourself. A moved tag can affect a newly prepared revision, never an existing session or saved rerun. Antioch supplies the Dockerfile frontend, so a leading `# syntax=` directive is refused. Build context uses the platform exclusions and `.dockerignore`, not `.gitignore`; source sync uses its separate [mapping rules](manifest.md#source-sync).
 
 A generated Dockerfile sets `ANTIOCH_PROJECT_DIR` and uses
 `/workspace/project`; project files reach that directory through the
@@ -92,9 +98,9 @@ without logging in; read each component result even if the command fails.
 
 Antioch never installs or upgrades the SDK. For a requested upgrade, rerun the
 user's own package-manager install with the new exact version, preserving
-their engine extra, pins, and lockfile. Change the Dockerfile's engine tag
-only when asked. A live session keeps its image; a new session uses the
-update.
+their engine extra, pins, and lockfile. An untagged engine image follows in
+the next new session; a tagged one stays on its tag, which you change only
+when asked. A live session keeps its image.
 
 ## Builds and revisions
 
@@ -102,8 +108,6 @@ update.
 graph before it starts the session; an unchanged build is a cache hit. See
 [sessions](sessions.md) for execution.
 
-A session's containers keep their pinned images after an SDK update. Build inputs determine whether a later submission rebuilds them; [source mappings](manifest.md#source-sync) determine which files can change without rebuilding. An unchanged build key reuses existing images, so editing only mapped source does not require a new image.
+Build inputs determine whether a later submission rebuilds images; [source mappings](manifest.md#source-sync) determine which files can change without rebuilding. An unchanged build key reuses existing images, so editing only mapped source does not require a new image.
 
 Continue with [sessions](sessions.md) to run a script, [scenario design](../../scenario-design/SKILL.md) to author a recorded evaluation, or [the Python client](python-client.md) to automate the same workflow. [Authentication](auth.md) owns sign-in and private registry access; [Antioch platform](../SKILL.md#capability-guides) is the task index.
-
-External Dockerfile `FROM` tags resolve to immutable digests before Antioch computes the build key; use `@sha256:` when you want to choose the digest yourself. A moved tag can affect a newly prepared revision, never an existing session or saved rerun. Antioch supplies the Dockerfile frontend, so a leading `# syntax=` directive is refused. Build context uses the platform exclusions and `.dockerignore`, not `.gitignore`; source sync uses its separate [mapping rules](manifest.md#source-sync).

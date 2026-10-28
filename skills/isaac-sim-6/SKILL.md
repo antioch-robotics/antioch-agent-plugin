@@ -1,6 +1,6 @@
 ---
 name: isaac-sim-6
-version: "1.4.4"
+version: "1.4.5"
 description: Use for Isaac Sim scene, USD, physics, robot, sensor, rendering, and synthetic-data code in Antioch. Covers startup and native API boundaries; load the task-specific reference for worked examples and depth. Use isaac-lab-3 for Lab environments and scenario-design for evaluations.
 ---
 

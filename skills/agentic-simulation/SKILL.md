@@ -1,6 +1,6 @@
 ---
 name: agentic-simulation
-version: "1.3.7"
+version: "1.3.9"
 description: Use when researching, developing, inspecting, testing, or improving simulations with Antioch, including controllers, custom kernels, solver integration, parameter fitting, datasets, policy experiments, and failure analysis. Choose a bounded research, Jupyter, script, or recorded evaluation loop and verify it with measurements and images.
 ---
 

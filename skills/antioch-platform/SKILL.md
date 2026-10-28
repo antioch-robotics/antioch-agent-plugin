@@ -1,6 +1,6 @@
 ---
 name: antioch-platform
-version: "1.5.43"
+version: "1.5.48"
 description: Use for Antioch projects, CLI and Python client commands, antioch.yaml, sessions, services, builds, source sync, streams, assets, scenarios, suites, run history, and authentication. Explains the platform model and routes to detailed references; native engine code belongs to the Isaac skills and ROS 2 stacks to ros2.
 ---
 
@@ -43,7 +43,8 @@ obtain compute or target a session explicitly. Without a target, Antioch reuses 
 A **scenario** is a typed Python evaluation; a **case** supplies parameter
 values. A **suite** selects scenarios and cases in YAML. Each execution
 creates run records and uploaded evidence that survive the session.
-A plain script creates no run history unless it calls a scenario.
+A plain script creates no run history unless it calls a scenario;
+`antioch.Telemetry` saves and streams its Rerun data without one.
 
 ## Keep code and compute in sync
 
@@ -57,6 +58,21 @@ executing, so avoid concurrent edits when preserving its inputs matters.
 Keep simulator imports inside functions or `TYPE_CHECKING` blocks so local
 discovery works without Isaac. Closing Python or an MCP connection does not
 release compute; save remote outputs before releasing a session you own.
+
+## Share results
+
+Share a run by its console link. `antioch scenario show SCENARIO_RUN_ID` and
+`antioch suite show SUITE_RUN_ID` print it on the `console` row, with the
+organization it belongs to. The console serves only these record links:
+
+| Share | Link |
+|---|---|
+| A scenario run | `<console>/scenarios/<scenario_run_id>` |
+| A suite run | `<console>/suites/<suite_run_id>` |
+| A project's scenario runs | `<console>/scenarios?project=<project_id>` |
+| A project's suite runs | `<console>/suites?projectFilter=<project_id>` |
+
+There is no project page. Never compose any other console path.
 
 ## Capability guides
 

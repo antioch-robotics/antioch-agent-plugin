@@ -50,6 +50,9 @@ Do not construct `ScenarioRun` directly. The decorator requires a real source
 file inside the project; a context does not.
 `antioch.current_scenario_run()` returns the active handle or raises
 `StateError` outside a run.
+One recording is active per process: a context refuses to start while an
+[`antioch.Telemetry`](telemetry.md#scripts-and-notebooks) scope is open, so
+stop that scope first.
 
 ## Recording authority
 

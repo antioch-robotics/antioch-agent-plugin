@@ -1,6 +1,6 @@
 ---
 name: scenario-design
-version: "1.4.15"
+version: "1.4.21"
 description: Use when authoring Antioch scenarios, typed cases, measured checks, results, artifacts, or telemetry. Covers evaluation and recording; use antioch-platform for dispatch/history and the Isaac skills for native simulator code.
 ---
 
@@ -59,7 +59,14 @@ cases = [
 A grid crosses independent values; combinations preserve intentional pairs. Shared overrides can accompany either expansion, but a parameter cannot be set both in the shared overrides and the expansion. Case tags combine with scenario tags for selection. Keep IDs stable enough to compare the same case across revisions.
 
 Decorator keywords: `name`, `description`, `tags`, `cases`, `config`,
-`blueprint`, `capture`, `service`, `profile`, and `restart_services`.
+`blueprint`, `capture`, `service`, `profile`, `restart_services`, and
+`kit_cache`.
+
+`kit_cache` names a folder, such as a workflow task's volume, that each run
+loads Isaac Sim's Kit cache from before Isaac Sim starts and saves it to when
+it passes, so its first frames skip compiling what an earlier run did. Plain
+code calls `antioch.load_kit_cache(path)` before `antioch.start_simulation()`
+and `antioch.save_kit_cache(path)` once it has rendered.
 
 `service` selects an eligible active container; it does not activate a profile. Omit it only when the active graph has one eligible service. `profile` includes helper services in the dispatched revision; `restart_services` restarts their processes and waits for fresh health before each managed run. Direct calls apply neither policy. For development with those helpers, or to target a session explicitly, start the required graph with `antioch session new --profile perception`. A submitted bundle reaches every mapped service, but a service outside `restart_services` keeps its existing process. If its files differ from those that process started with, the run reports earlier service code. Restart that helper between runs or add it to this policy. See [manifest services](../antioch-platform/references/manifest.md#services-and-images) and [restart behavior](../antioch-platform/references/sessions.md#run-and-sync-source).
 
@@ -86,19 +93,17 @@ unexpected exceptions still produce `ERRORED`.
 
 Keep thresholds and summaries in JSON results and do not write the reserved `checks` key. `run.add_results({...})` stores several results together; values must be finite, JSON-compatible values, so convert arrays and tensors before storing a small summary. Keep large arrays, tables, images, and files in artifacts instead. Artifact names are unique within a run; use `name=` when files share a basename. `output` and `telemetry` are reserved artifact names. An artifact uploads when `add_artifact` is called; keep many small files in one archive to avoid an upload for each.
 
-`run.params`, `case_id`, `tags`, `scenario_run_id`, `suite_run_id`, `suite`, and `suite_position` describe the current evaluation. `wall_s` and `sim_s` distinguish elapsed wall time from simulation time; `sim_s` can be absent without a simulator. Long loops should call `run.raise_if_cancelled()` so a requested cancellation can stop useful work promptly. [In-session recording](references/recording.md#cancellation-and-process-exit) explains why a direct call cannot rely on the platform killing its parent process.
+`run.params`, `case_id`, `tags`, `scenario_run_id`, `suite_run_id`, `suite`, and `suite_position` describe the current evaluation. `wall_s` and `sim_s` distinguish elapsed wall time from simulation time; `sim_s` can be absent without a simulator, and a loop that steps Newton or MuJoCo-Warp without Kit sets it with `run.set_sim_time(seconds)` ([telemetry](references/telemetry.md#simulation-time-without-kit)). Long loops should call `run.raise_if_cancelled()` so a requested cancellation can stop useful work promptly; it reads a flag refreshed in the background and never waits on the network, so calling it every step is fine. [In-session recording](references/recording.md#cancellation-and-process-exit) explains why a direct call cannot rely on the platform killing its parent process.
 
 ## Telemetry and read-back
 
-A module-scope `antioch.Logger` resolves the active run on each call. Use
+A module-scope `antioch.Logger` writes into whichever recording is active
+when it is called, a scenario's or a script's `antioch.Telemetry`, beside
+native `rr.log` calls. Use
 `scalar` for metrics, `image` for raw RGB/RGBA review frames, and `value`
 for Rerun archetypes; image calls take a path and then pixels:
 `logger.image("camera/front", rgb)`. Read [telemetry](references/telemetry.md)
 for image encoding, timelines, geometry, layouts, and diagnosing RRDs.
-
-Automatic viewport capture is a bounded diagnostic sampler, not a task check:
-it neither aims the camera nor proves physical correctness. `capture=False`
-disables it.
 
 After execution, inspect the checks, results, and relevant artifacts through
 [run history](../antioch-platform/references/scenarios.md). Smooth video
@@ -115,6 +120,7 @@ and [research](../antioch-research/SKILL.md).
 |---|---|
 | Choose typed inputs, cases, or a pass/fail criterion | This skill's authoring, input, and measured-verdict sections |
 | Save camera images, metrics, geometry, and a useful viewer layout | [Telemetry and viewer layouts](references/telemetry.md) |
+| Stream or save telemetry from a script or notebook without a run | [Scripts and notebooks](references/telemetry.md#scripts-and-notebooks) |
 | Record code in a script or notebook; handle offline work or cancellation | [In-session recording](references/recording.md) |
 | Run, compare, download, cancel, or repeat saved work | [Scenario history](../antioch-platform/references/scenarios.md) and [suites](../antioch-platform/references/suites.md) |
 | Iterate on native code before making a recorded evaluation | [Agentic simulation](../agentic-simulation/SKILL.md) |

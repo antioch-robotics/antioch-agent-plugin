@@ -1,6 +1,6 @@
 ---
 name: ros2
-version: "1.1.0"
+version: "1.1.1"
 description: Use for ROS 2 nodes, launch files, parameters, and message flow that drive or observe an Antioch simulation, including rclpy in the Isaac Sim engine, the Isaac ROS 2 bridge, simulation time, tf2, QoS and discovery, Nav2, MoveIt 2, and ros2_control, on Jazzy or another distro in a ROS service image. Service routes belong to antioch-platform and scene code to isaac-sim-6.
 ---
 

@@ -209,6 +209,11 @@ uses the topics `isaac_joint_states` and `isaac_joint_commands`; see
 Joint names must match the URDF the ROS stack loads. Revolute positions are
 radians and prismatic positions meters when the stage is in meters.
 
+The articulation read and controller nodes are Python OmniGraph nodes.
+Ticking them on every physics step cost a 400 Hz single-arm scene about 4 ms
+per 50 Hz frame against driving the joints directly, so tick the joint bridge
+at the controller's rate, not the physics rate.
+
 ## Frames and quaternions
 
 OmniGraph `quatd` values are IJKR, `(x, y, z, w)`, so identity is

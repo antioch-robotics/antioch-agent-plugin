@@ -43,7 +43,7 @@ For Lab, use its environment or `SimulationContext` loop, not a second World.
 | `extensions` | Installed extension IDs enabled before stage construction |
 | `renderer_quality` | `performance`, `balanced`, or `quality`; global rendering preset that can change sensor pixels but not sensor resolution |
 | `extra_args` | Native Kit arguments appended after Antioch defaults |
-| `stream` | Allows streaming when the command passes `--stream`; `False` keeps the process headless even with that flag. Without the flag, streaming is off. |
+| `stream` | `True` streams the process to Mission Control; `False`, the default, keeps it headless. A command's `--stream` or `--no-stream` overrides it. |
 | `timeout_s` | Scenario execution timeout; an explicit CLI `--timeout` overrides it |
 | `viewport_updates` | `None` renders the default viewport while streaming and pauses it otherwise; `True` also renders without a stream, and `False` pauses it even with a stream |
 | `keyboard_navigation` | `True` (default) flies a streamed viewport's camera from the keyboard: arrows move, `Shift` + arrows look, `Ctrl` + `Up`/`Down` or `Shift` + `E`/`Q` rise and descend, `-`/`=` scale speed, held `X`/`Z` double or halve it. `False` leaves those keys to authored input such as Isaac Lab's `Se2Keyboard`; headless processes never subscribe |

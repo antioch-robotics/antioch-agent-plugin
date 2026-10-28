@@ -1,29 +1,31 @@
 # Navigation and capture
 
-`antioch.lib.navigation` moves a native inspection camera; `antioch.lib.viewport`
-reads the existing viewport. Neither advances physics or moves the subject.
+`antioch.viewport.camera` moves a native inspection camera; `antioch.viewport.capture`
+reads the existing viewport. Neither advances physics or moves the subject. A
+session on an older engine image names them `antioch.lib.navigation` and
+`antioch.lib.viewport`; the calls are the same.
 
 ## Position the view
 
 ```python
 from IPython.display import display
-from antioch.lib import navigation, viewport
+from antioch.viewport import camera, capture
 
-navigation.look_at(eye=(4, 4, 3), target=(0, 0, 0.5))
-display(await viewport.observe_async())
+camera.look_at(eye=(4, 4, 3), target=(0, 0, 0.5))
+display(await capture.observe_async())
 ```
 
 More operations, none of which render:
 
 ```python
-saved = navigation.get_pose()
-navigation.translate((0, 0, -1), space="camera")  # forward along local -Z
-navigation.translate((0, 0, 1), space="world")
-navigation.rotate("y", 15, space="camera")  # degrees
-navigation.rotate((0, 0, 1), 30, space="world")
-navigation.orbit((0, 0, 0), azimuth_deg=45, elevation_deg=20, radius=4)
-navigation.frame_object("/World/Robot", margin=1.2)
-navigation.set_pose(saved)
+saved = camera.get_pose()
+camera.translate((0, 0, -1), space="camera")  # forward along local -Z
+camera.translate((0, 0, 1), space="world")
+camera.rotate("y", 15, space="camera")  # degrees
+camera.rotate((0, 0, 1), 30, space="world")
+camera.orbit((0, 0, 0), azimuth_deg=45, elevation_deg=20, radius=4)
+camera.frame_object("/World/Robot", margin=1.2)
+camera.set_pose(saved)
 ```
 
 Distances use stage units; orientations use USD WXYZ quaternions. Orbit angles
@@ -35,8 +37,8 @@ accepts `camera_path`. To inspect an authored sensor without changing its pose
 or lens, select it:
 
 ```python
-navigation.select_camera("/World/Camera")
-display(await viewport.observe_async())
+camera.select_camera("/World/Camera")
+display(await capture.observe_async())
 ```
 
 ## Read pixels

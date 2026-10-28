@@ -42,6 +42,8 @@ asynchronous capture is running. A standalone script owns its own loop.
 - Swapchain capture -> also works on Kit 110 if you explicitly set window size matching the render resolution.
 - Replicator render products may return empty arrays for Gaussian splat scenes; fall back to swapchain capture in that case.
 
+**Capture cost**: leave a render product on rather than toggling `hydra_texture.set_updates_enabled()` per capture, which cost ~5 ms per toggle plus ~30 ms of extra render on each re-enabled frame, or slow it with a sensor tick rate (`omni:sensor:tickRate`). An annotator on the streamed viewport reads at whatever size the viewer's browser negotiated, and that size drives encode cost; record from a render product of fixed size.
+
 ## Choose and tune the renderer
 
 Use RTX real-time for iterative work when it meets the task. Path tracing
@@ -49,11 +51,16 @@ can be useful for offline fidelity comparisons; profile its convergence and
 cost on the actual scene. Startup and frame timings depend on assets,
 shaders, resolution, and hardware, not one fixed settle count.
 
+Kit 110's real-time mode is RTX Real-Time 2.0 (`RealTimePathTracing`), which
+Antioch runs by default; the legacy `RaytracedLighting` mode is not enabled,
+and Real-Time 2.0 anti-aliasing (`/rtx/post/aa/op`) takes only DLSS (`3`) or
+DLAA (`4`).
+
 ```python
 import carb
 
 settings = carb.settings.get_settings()
-settings.set("/rtx/rendermode", "RayTracedLighting")
+print(settings.get("/rtx/rendermode"))
 # For an offline path-traced comparison:
 # settings.set("/rtx/rendermode", "PathTracing")
 ```
