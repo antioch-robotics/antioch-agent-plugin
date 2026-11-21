@@ -33,6 +33,38 @@ service names; with several eligible services, select the target with
 
 Supporting services can declare commands, environment, working directory, profiles, dependencies, health checks, resources, restart policy, routes, and sync mappings. Commands and health checks must include any required image environment setup. Services without profiles always run; a service with profiles runs only when one is selected. Start with repeated `--profile` options when several profiles are needed. If all services have profiles, select one explicitly; an empty selection does not enable everything.
 
+## Secrets
+
+```yaml
+services:
+  sim:
+    secrets: [openai]
+```
+
+A service reads API keys and tokens from the organization's stored secrets
+it lists under `secrets:`, never from `environment:`: antioch.yaml is public
+configuration, and a credential-named value there is cleared before
+submission. Each secret is a named set of environment variables that every
+process of the service reads in each new session, later-listed secrets
+winning a shared name. A session naming a secret nobody created is refused
+before it starts.
+
+```bash
+antioch secret create NAME KEY=VALUE
+antioch secret create NAME --from-dotenv .env
+antioch secret list --json
+antioch secret delete NAME --yes
+```
+
+Each key is the environment variable your code reads its value from; write
+`KEY="$KEY"` to take the value from the shell, or `KEY=-` to type it in an
+editor. `create` refuses a name that is already taken; `--force` replaces the whole secret, and the console's
+Settings page edits one key and keeps the rest. Values are never shown
+again, and a running session keeps the values it started with, so start a
+new session after changing one.
+Never print, log, or commit a secret's value, and ask the user to create one
+rather than inventing a value.
+
 ## Dependencies and resources
 
 `depends_on` supports `service_started` (default), `service_healthy`, or

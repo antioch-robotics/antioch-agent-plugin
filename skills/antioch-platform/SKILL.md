@@ -1,6 +1,6 @@
 ---
 name: antioch-platform
-version: "1.5.48"
+version: "1.5.49"
 description: Use for Antioch projects, CLI and Python client commands, antioch.yaml, sessions, services, builds, source sync, streams, assets, scenarios, suites, run history, and authentication. Explains the platform model and routes to detailed references; native engine code belongs to the Isaac skills and ROS 2 stacks to ros2.
 ---
 
@@ -87,6 +87,7 @@ Load the guide for the operation you need:
 | `suite`: collect, run, summarize, compare, cancel, delete, or repeat groups | [Suites](references/suites.md) |
 | `asset`: find, load, publish, verify, or repair reusable content | [Assets](references/assets.md) |
 | `auth`, including `auth registry`: identity and image access | [Authentication](references/auth.md) |
+| `secret`: store API keys and tokens that services read | [Manifest](references/manifest.md#secrets) |
 | ROS bridge and cross-service traffic | [ROS 2](references/ros2.md) |
 | ROS 2 nodes, tf2, Nav2, MoveIt 2, ros2_control against the simulator | [ROS 2](../ros2/SKILL.md) |
 | Script startup, native state, and rendering configuration | [Simulation code](references/simulation-code.md) |

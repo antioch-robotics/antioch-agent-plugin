@@ -72,7 +72,7 @@ this plugin. [NOTICE](NOTICE) records provenance and licensing.
 
 ## Install and inspect setup
 
-Install the [Antioch SDK](https://console.preview.antioch.com/docs/quickstart/install-the-sdk)
+Install the [Antioch SDK](https://console.antioch.com/docs/quickstart/install-the-sdk)
 in your project's Python 3.12 virtual environment, then activate it and sign in.
 From the project directory, preview and apply plugin setup:
 
@@ -113,7 +113,7 @@ and to keep failed samples as diagnostic evidence.
 
 Run `antioch setup --dry-run` to preview a plugin update, then
 `antioch setup` to apply it. Upgrade the SDK and engine image yourself as
-described in [Upgrade the SDK](https://console.preview.antioch.com/docs/quickstart/install-the-sdk#upgrade-the-sdk).
+described in [Upgrade the SDK](https://console.antioch.com/docs/quickstart/install-the-sdk#upgrade-the-sdk).
 
 To remove this plugin, use `claude plugin uninstall antioch@antioch` or
 `codex plugin remove antioch@antioch`. Remove its marketplace only if no
