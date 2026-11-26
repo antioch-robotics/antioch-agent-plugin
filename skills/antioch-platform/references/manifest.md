@@ -85,7 +85,8 @@ All of a session's services share one machine; `with:` placement groups are
 accepted and ignored. A top-level `region: uk` (or `us-central`) pins every
 session of the project there, including the ones Antioch starts for runs,
 and `resources.region` still works as its spelling; a region no cell serves
-is refused. Without a pin, placement prefers available compute, recent project reuse, and nearby capacity using measured latency before allocating more machines. Inspect the selected session's region rather than assuming every session lands in the same place.
+is refused. A top-level `cloud: gcp` (or `nebius`), or `resources.cloud`,
+pins the cloud the same way, and combines with `region`. Without a pin, placement prefers available compute, recent project reuse, and nearby capacity using measured latency before allocating more machines. Inspect the selected session's region rather than assuming every session lands in the same place.
 
 Omitted CPU/memory means no request or limit; declared values reserve and cap
 that service's resources (cores or milli-units, quantities such as `4Gi`).
